@@ -2,6 +2,11 @@ import logging
 from livekit.agents import function_tool, RunContext
 import requests
 from langchain_community.tools import DuckDuckGoSearchRun
+import os
+import smtplib
+from email.mime.multipart import MIMEMultipart  
+from email.mime.text import MIMEText
+from typing import Optional
 
 @function_tool()
 async def get_weather(
@@ -35,6 +40,7 @@ async def search_web(
     except Exception as e:
         logging.error(f"Error searching the web for '{query}': {e}")
         return f"An error occurred while searching the web for '{query}'."  
+
 
 @function_tool()    
 async def send_email(

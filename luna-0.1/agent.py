@@ -1,5 +1,6 @@
 from dotenv import load_dotenv
 
+from tools.memory import initialize_database
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, room_io
 from livekit.plugins import (
@@ -7,18 +8,31 @@ from livekit.plugins import (
 )
 from livekit.plugins import google
 from prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
-from tools import get_weather, search_web
+from tools import (
+    get_weather,
+    search_web,
+    send_email,
+    remember,
+    recall,
+)
 load_dotenv()
+initialize_database()
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=AGENT_INSTRUCTION,
             llm=google.beta.realtime.RealtimeModel(
-            voice="Despina",
-            temperature=0.7,
-        ),
-            tools=[get_weather, search_web],
+                voice="Despina",
+                temperature=0.7,
+            ),
+            tools=[
+                get_weather,
+                search_web,
+                send_email,
+                remember,
+                recall,
+            ],
         )
         
 
