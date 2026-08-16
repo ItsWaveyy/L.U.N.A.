@@ -12,15 +12,25 @@ async def main():
         MockProvider(),
     ])
 
-    response = await router.generate(
-        AIRequest(
-            prompt="Hello Luna",
-            task="conversation",
-        )
-    )
+    tasks = [
+        "coding",
+        "research",
+        "conversation",
+        "general",
+    ]
 
-    print("Response:", response.text)
-    print("Provider:", response.provider)
+    for task in tasks:
+        print(f"\n--- {task.upper()} ---")
+
+        response = await router.generate(
+            AIRequest(
+                prompt=f"Test {task} request",
+                task=task,
+            )
+        )
+
+        print("Response:", response.text)
+        print("Provider:", response.provider)
 
 
 if __name__ == "__main__":

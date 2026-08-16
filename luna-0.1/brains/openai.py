@@ -1,7 +1,6 @@
-import os
-
 from openai import AsyncOpenAI
 
+from config import OPENAI_API_KEY
 from core.providers import AIProvider, AIRequest, AIResponse
 
 
@@ -11,14 +10,14 @@ class OpenAIProvider(AIProvider):
     name = "openai"
 
     def __init__(self, model: str = "gpt-5-mini"):
-        api_key = os.getenv("OPENAI_API_KEY")
-
-        if not api_key:
+        if not OPENAI_API_KEY:
             raise RuntimeError(
                 "OPENAI_API_KEY is not configured."
             )
 
-        self.client = AsyncOpenAI(api_key=api_key)
+        self.client = AsyncOpenAI(
+            api_key=OPENAI_API_KEY
+        )
         self.model = model
 
     @property
