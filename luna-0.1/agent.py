@@ -14,6 +14,7 @@ from tools import (
     send_email,
     remember,
     recall,
+    delegate_task,
 )
 load_dotenv()
 initialize_database()
@@ -32,6 +33,7 @@ class Assistant(Agent):
                 send_email,
                 remember,
                 recall,
+                delegate_task,
             ],
         )
         
