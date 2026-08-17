@@ -16,12 +16,9 @@ class OllamaProvider(AIProvider):
     @property
     def capabilities(self) -> set[str]:
         return {
-            "general",
-            "conversation",
             "coding",
             "research",
             "creative",
-            "fast",
         }
 
     async def generate(self, request: AIRequest) -> AIResponse:

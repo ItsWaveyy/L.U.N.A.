@@ -62,8 +62,6 @@ class AIRouter:
         )
 
     def _rank_providers(self, task: str) -> list[AIProvider]:
-        """Return providers ordered according to task preference."""
-
         preferences = self.TASK_PREFERENCES.get(
             task,
             self.TASK_PREFERENCES["general"],
@@ -76,16 +74,15 @@ class AIRouter:
 
         ranked = []
 
-        # Add providers in preferred order.
         for provider_name in preferences:
             provider = available.get(provider_name)
 
-            if provider is not None:
-                ranked.append(provider)
+            if provider is None:
+                continue
 
-        # Add any remaining providers as final fallbacks.
-        for provider in self.providers:
-            if provider not in ranked:
-                ranked.append(provider)
+            if task not in provider.capabilities:
+                continue
+
+            ranked.append(provider)
 
         return ranked
