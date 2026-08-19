@@ -16,13 +16,28 @@ class OllamaProvider(AIProvider):
     @property
     def capabilities(self) -> set[str]:
         return {
-            "coding",
-            "research",
-            "creative",
+            "general",
+            "conversation",
+            "fast",
         }
 
     async def generate(self, request: AIRequest) -> AIResponse:
-        messages = []
+        messages = [
+            {
+                "role": "system",
+                "content": """
+    You are L.U.N.A.'s local utility brain.
+
+    You handle fast, simple tasks and short conversational requests.
+
+    Be concise.
+    Answer directly.
+    Do not explain simple answers unless explanation is requested.
+    Do not use emojis unless they are appropriate.
+    Do not add unnecessary introductions or conclusions.
+    """,
+            }
+        ]
 
         if request.system_prompt:
             messages.append({
