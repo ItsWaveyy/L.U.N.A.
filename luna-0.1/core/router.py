@@ -2,10 +2,8 @@ from core.providers import AIProvider, AIRequest, AIResponse
 
 
 class AIRouter:
-    """Selects the best available AI provider for a task."""
+    """Selects the best available AI provider and handles fallback."""
 
-    # Preferred provider order for each task.
-    # Providers not listed here can still be used through fallback.
     TASK_PREFERENCES = {
         "coding": ["anthropic", "openai", "gemini", "local"],
         "research": ["openai", "anthropic", "gemini", "local"],
@@ -18,7 +16,10 @@ class AIRouter:
     def __init__(self, providers: list[AIProvider]):
         self.providers = providers
 
-    async def generate(self, request: AIRequest) -> AIResponse:
+    async def generate(
+        self,
+        request: AIRequest,
+    ) -> AIResponse:
         candidates = self._rank_providers(request.task)
 
         if not candidates:
@@ -26,14 +27,17 @@ class AIRouter:
                 f"No providers available for task '{request.task}'."
             )
 
+        attempted_providers = []
         last_error = None
 
-        for provider in candidates:
+        for index, provider in enumerate(candidates):
+            attempted_providers.append(provider.name)
+
             try:
                 if not await provider.health_check():
                     print(
                         f"[L.U.N.A.] Provider '{provider.name}' "
-                        "is unhealthy. Skipping."
+                        "is unhealthy. Trying fallback."
                     )
                     continue
 
@@ -42,26 +46,50 @@ class AIRouter:
                 response.metadata.update({
                     "task": request.task,
                     "routing": "task_preference",
+                    "provider_attempts": len(attempted_providers),
+                    "providers_tried": attempted_providers,
                 })
+
+                if index > 0:
+                    response.metadata["fallback_used"] = True
+                    response.metadata["fallback_from"] = candidates[0].name
+                else:
+                    response.metadata["fallback_used"] = False
 
                 return response
 
             except Exception as exc:
                 last_error = exc
+
                 print(
                     f"[L.U.N.A.] Provider '{provider.name}' failed: {exc}"
                 )
 
+                if index < len(candidates) - 1:
+                    next_provider = candidates[index + 1].name
+
+                    print(
+                        f"[L.U.N.A.] Falling back to "
+                        f"'{next_provider}'."
+                    )
+
         if last_error:
             raise RuntimeError(
-                f"All providers failed for task '{request.task}'."
+                f"All providers failed for task "
+                f"'{request.task}'. Tried: "
+                f"{', '.join(attempted_providers)}"
             ) from last_error
 
         raise RuntimeError(
-            f"No healthy providers available for task '{request.task}'."
+            f"No healthy providers available for task "
+            f"'{request.task}'. Tried: "
+            f"{', '.join(attempted_providers)}"
         )
 
-    def _rank_providers(self, task: str) -> list[AIProvider]:
+    def _rank_providers(
+        self,
+        task: str,
+    ) -> list[AIProvider]:
         preferences = self.TASK_PREFERENCES.get(
             task,
             self.TASK_PREFERENCES["general"],
