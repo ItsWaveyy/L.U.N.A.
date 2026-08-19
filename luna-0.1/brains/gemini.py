@@ -32,6 +32,7 @@ class GeminiProvider(AIProvider):
             "coding",
             "research",
             "creative",
+            "fast",
         }
 
     async def generate(self, request: AIRequest) -> AIResponse:

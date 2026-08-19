@@ -1,5 +1,6 @@
 from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
+from core.classifier import TaskClassifier
 
 
 CORE_SYSTEM_PROMPT = """
@@ -34,17 +35,27 @@ Do not invent capabilities or actions.
 class LunaCore:
     def __init__(self, providers: list[AIProvider]):
         self.router = AIRouter(providers)
+        self.classifier = TaskClassifier()
 
     async def ask(
         self,
         prompt: str,
-        task: str = "general",
+        task: str | None = None,
         system_prompt: str | None = None,
     ) -> AIResponse:
+
+        # Automatically classify the request unless
+        # the caller explicitly provides a task.
+        if task is None:
+            classification = self.classifier.classify(prompt)
+            task = classification.task
+
         combined_system_prompt = CORE_SYSTEM_PROMPT
 
         if system_prompt:
-            combined_system_prompt += f"\n\nAdditional instructions:\n{system_prompt}"
+            combined_system_prompt += (
+                f"\n\nAdditional instructions:\n{system_prompt}"
+            )
 
         request = AIRequest(
             prompt=prompt,
@@ -52,4 +63,10 @@ class LunaCore:
             system_prompt=combined_system_prompt,
         )
 
-        return await self.router.generate(request)
+        response = await self.router.generate(request)
+
+        response.metadata.update({
+            "classified_task": task,
+        })
+
+        return response
