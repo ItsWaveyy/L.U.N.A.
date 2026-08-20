@@ -1,0 +1,26 @@
+1. make sure you're in:
+    /Users/reece/Documents/L.U.N.A./luna-0.1
+
+2. Then deactivate:
+
+    deactivate
+
+3. Delete only the venv:
+
+    rm -rf venv
+
+4. Then create a completely fresh one:
+
+    python3.13 -m venv venv
+
+5. Activate:
+
+    source venv/bin/activate
+
+6. Upgrade the basic packaging tools:
+
+    python -m pip install --upgrade pip setuptools wheel
+
+7. Then reinstall your requirements:
+
+    python -m pip install -r requirements.txt

@@ -58,7 +58,15 @@ class GeminiProvider(AIProvider):
         )
 
     async def health_check(self) -> bool:
-        return True
+        try:
+            await self.client.aio.models.list()
+            return True
+
+        except Exception as exc:
+            print(
+                f"[L.U.N.A.] Gemini health check failed: {exc}"
+            )
+            return False
 
     async def close(self) -> None:
         await self.http_client.aclose()

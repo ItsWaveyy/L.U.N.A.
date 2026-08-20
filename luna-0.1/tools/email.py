@@ -21,8 +21,8 @@ async def send_email(
     to send an email.
     """
 
-    sender = os.getenv("EMAIL_ADDRESS")
-    password = os.getenv("EMAIL_PASSWORD")
+    sender = os.getenv("GMAIL_USER")
+    password = os.getenv("GMAIL_APP_PASSWORD")  # Use App Password, not regular password
 
     if not sender or not password:
         return "Email is not configured yet."

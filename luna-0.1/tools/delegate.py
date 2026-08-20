@@ -1,17 +1,22 @@
 from livekit.agents import function_tool
 
-from brains.gemini import GeminiProvider
-from brains.ollama import OllamaProvider
-from core.orchestrator import LunaCore
-from core.registry import ProviderRegistry
+_luna = None
 
 
-registry = ProviderRegistry()
+def _get_luna():
+    global _luna
+    if _luna is None:
+        from brains.gemini import GeminiProvider
+        from brains.ollama import OllamaProvider
+        from core.orchestrator import LunaCore
+        from core.registry import ProviderRegistry
 
-registry.register(GeminiProvider())
-registry.register(OllamaProvider())
+        registry = ProviderRegistry()
+        registry.register(GeminiProvider())
+        registry.register(OllamaProvider())
+        _luna = LunaCore(registry.all())
 
-luna = LunaCore(registry.all())
+    return _luna
 
 
 @function_tool
@@ -25,6 +30,8 @@ async def delegate_task(
     Use this for tasks requiring deeper reasoning, coding,
     research, creative work, or specialized processing.
     """
+
+    luna = _get_luna()
 
     response = await luna.ask(
         prompt=prompt,

@@ -70,3 +70,21 @@ class LunaCore:
         })
 
         return response
+
+    async def health_status(self) -> dict[str, bool]:
+        """Return the health status of every registered provider."""
+
+        status = {}
+
+        for provider in self.router.providers:
+            try:
+                status[provider.name] = await provider.health_check()
+
+            except Exception as exc:
+                print(
+                    f"[L.U.N.A.] Health check failed for "
+                    f"'{provider.name}': {exc}"
+                )
+                status[provider.name] = False
+
+        return status

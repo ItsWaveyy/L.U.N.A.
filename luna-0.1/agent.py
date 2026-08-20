@@ -1,22 +1,42 @@
 from dotenv import load_dotenv
 
-from tools.memory import initialize_database
 from livekit import agents
-from livekit.agents import AgentServer, AgentSession, Agent, room_io
+from livekit.agents import AgentServer, AgentSession, Agent, room_io, function_tool, RunContext
 from livekit.plugins import (
     ai_coustics,
 )
 from livekit.plugins import google
 from prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
-from tools import (
-    get_weather,
-    send_email,
-    remember,
-    recall,
-    delegate_task,
-)
+from tools.memory import initialize_database, remember, recall
+
+
+@function_tool()
+async def get_weather(context: RunContext, city: str) -> str:
+    from tools.weather import get_weather as _get_weather
+    return await _get_weather(context, city)
+
+
+@function_tool()
+async def get_weather_forecast(context: RunContext, city: str, days: int = 3) -> str:
+    from tools.weather import get_weather as _get_weather
+    return await _get_weather(context, city, days=days)
+
+
+@function_tool()
+async def send_email(context: RunContext, recipient: str, subject: str, body: str) -> str:
+    from tools.email import send_email as _send_email
+    return await _send_email(context, recipient, subject, body)
+
+
+@function_tool()
+async def delegate_task(prompt: str, task: str = "general") -> str:
+    from tools.delegate import delegate_task as _delegate_task
+    return await _delegate_task(prompt=prompt, task=task)
+
+
 load_dotenv()
 initialize_database()
+
 
 class Assistant(Agent):
     def __init__(self) -> None:
@@ -28,6 +48,7 @@ class Assistant(Agent):
             ),
             tools=[
                 get_weather,
+                get_weather_forecast,
                 send_email,
                 remember,
                 recall,
