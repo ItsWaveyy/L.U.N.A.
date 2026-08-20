@@ -5,12 +5,12 @@ class AIRouter:
     """Selects the best available AI provider and handles fallback."""
 
     TASK_PREFERENCES = {
-        "coding": ["anthropic", "openai", "gemini", "local"],
-        "research": ["openai", "anthropic", "gemini", "local"],
-        "creative": ["anthropic", "openai", "gemini", "local"],
-        "conversation": ["gemini", "openai", "anthropic", "local"],
-        "fast": ["local", "gemini", "openai", "anthropic"],
-        "general": ["openai", "gemini", "anthropic", "local"],
+        "coding": ["groq", "gemini", "local"],
+        "research": ["gemini", "groq", "local"],
+        "creative": ["gemini", "groq", "local"],
+        "conversation": ["gemini", "groq", "local"],
+        "fast": ["local", "groq", "gemini"],
+        "general": ["gemini", "groq", "local"],
     }
 
     def __init__(self, providers: list[AIProvider]):

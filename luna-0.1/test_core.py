@@ -1,6 +1,7 @@
 import asyncio
 
 from brains.gemini import GeminiProvider
+from brains.groq import GroqProvider
 from brains.ollama import OllamaProvider
 from core.orchestrator import LunaCore
 from core.registry import ProviderRegistry
@@ -10,6 +11,7 @@ async def main():
     registry = ProviderRegistry()
 
     registry.register(GeminiProvider())
+    registry.register(GroqProvider())
     registry.register(OllamaProvider())
 
     luna = LunaCore(registry.all())

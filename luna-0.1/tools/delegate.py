@@ -7,12 +7,14 @@ def _get_luna():
     global _luna
     if _luna is None:
         from brains.gemini import GeminiProvider
+        from brains.groq import GroqProvider
         from brains.ollama import OllamaProvider
         from core.orchestrator import LunaCore
         from core.registry import ProviderRegistry
 
         registry = ProviderRegistry()
         registry.register(GeminiProvider())
+        registry.register(GroqProvider())
         registry.register(OllamaProvider())
         _luna = LunaCore(registry.all())
 
@@ -22,7 +24,7 @@ def _get_luna():
 @function_tool
 async def delegate_task(
     prompt: str,
-    task: str = "general",
+    task: str | None = None,
 ) -> str:
     """
     Delegate a task to L.U.N.A.'s Core intelligence layer.
