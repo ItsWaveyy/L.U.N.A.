@@ -2,11 +2,10 @@ from dotenv import load_dotenv
 
 from livekit import agents
 from livekit.agents import AgentServer, AgentSession, Agent, room_io, function_tool, RunContext
-from livekit.plugins import (
-    ai_coustics,
-)
-from livekit.plugins import google
-from prompts import AGENT_INSTRUCTION, SESSION_INSTRUCTION
+from livekit.agents.llm import StopResponse
+from livekit.plugins import ai_coustics, google
+from core.orchestrator import LunaCore, SessionSleepWakeController
+from prompts import AGENT_INSTRUCTION, build_session_instruction
 from tools.memory import initialize_database, remember, recall
 
 
@@ -39,7 +38,8 @@ initialize_database()
 
 
 class Assistant(Agent):
-    def __init__(self) -> None:
+    def __init__(self, sleep_controller: SessionSleepWakeController) -> None:
+        self.sleep_controller = sleep_controller
         super().__init__(
             instructions=AGENT_INSTRUCTION,
             llm=google.beta.realtime.RealtimeModel(
@@ -55,19 +55,30 @@ class Assistant(Agent):
                 delegate_task,
             ],
         )
+
+    async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
+        transcript = getattr(new_message, "text_content", None)
+        if callable(transcript):
+            transcript = transcript()
+        if transcript is None:
+            transcript = getattr(new_message, "raw_text_content", "")
+
+        self.sleep_controller.handle_transcript(transcript)
+        if not self.sleep_controller.luna_core.listening:
+            raise StopResponse()
         
 
 server = AgentServer()
 
 @server.rtc_session(agent_name="my-agent")
 async def my_agent(ctx: agents.JobContext):
-    session = AgentSession(
-        
-    )
+    session = AgentSession()
+    luna_core = LunaCore([])
+    sleep_controller = SessionSleepWakeController(session, luna_core)
 
     await session.start(
         room=ctx.room,
-        agent=Assistant(),
+        agent=Assistant(sleep_controller),
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 noise_cancellation=ai_coustics.audio_enhancement(model=ai_coustics.EnhancerModel.QUAIL_VF_S),
@@ -75,8 +86,11 @@ async def my_agent(ctx: agents.JobContext):
         ),
     )
 
+    sleep_controller.sync_session_input()
+    session.on("user_input_transcribed", sleep_controller.handle_transcription_event)
+
     await session.generate_reply(
-        instructions=SESSION_INSTRUCTION
+        instructions=build_session_instruction()
     )
 
 

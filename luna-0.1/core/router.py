@@ -34,13 +34,6 @@ class AIRouter:
             attempted_providers.append(provider.name)
 
             try:
-                if not await provider.health_check():
-                    print(
-                        f"[L.U.N.A.] Provider '{provider.name}' "
-                        "is unhealthy. Trying fallback."
-                    )
-                    continue
-
                 response = await provider.generate(request)
 
                 response.metadata.update({

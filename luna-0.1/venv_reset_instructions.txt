@@ -1,5 +1,5 @@
 1. make sure you're in:
-    /Users/reece/Documents/L.U.N.A./luna-0.1
+    /Users/reece/L.U.N.A./luna-0.1
 
 2. Then deactivate:
 
@@ -23,4 +23,4 @@
 
 7. Then reinstall your requirements:
 
-    python -m pip install -r requirements.txt
+    python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt

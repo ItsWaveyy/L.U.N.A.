@@ -1,10 +1,13 @@
 import sqlite3
+from pathlib import Path
+
 from livekit.agents import function_tool, RunContext
 
-DATABASE_PATH = "data/luna.db"
+DATABASE_PATH = Path(__file__).resolve().parent.parent / "data" / "luna.db"
 
 
 def initialize_database():
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(DATABASE_PATH)
 
     cursor = connection.cursor()
@@ -31,6 +34,7 @@ async def remember(
     """
 
     try:
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(DATABASE_PATH)
         cursor = connection.cursor()
 
@@ -58,6 +62,7 @@ async def recall(
     """
 
     try:
+        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(DATABASE_PATH)
         cursor = connection.cursor()
 

@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 AGENT_INSTRUCTION = """
 # Persona 
 You are L.U.N.A. — Lowkey Useful Neural Assistant.
@@ -87,17 +90,28 @@ Be useful first.
 A little personality is encouraged.
 """
 
-SESSION_INSTRUCTION = """
-    Begin the conversation naturally.
+def build_session_instruction(current_time: datetime | None = None) -> str:
+    current_time = current_time or datetime.now().astimezone()
+    hour = current_time.hour
 
-    Depending on the time of day, say something like:
+    if 0 <= hour < 12:
+        greeting = "Good morning"
+    elif 12 <= hour < 18:
+        greeting = "Good afternoon"
+    else:
+        greeting = "Good evening"
 
-    "Good afternoon, sir. LUNA online. How may I help?"
+    return f"""
+    Begin the conversation naturally. The user's local time is {current_time.strftime('%A, %B %d, %Y at %I:%M %p')}.
+    Open with: "{greeting}, sir. LUNA online. How may I help?"
 
     Then remain ready for the user's request.
 
-    Do not give a long explanation of your capabilities unless asked. 
-    
-    If any systems are unavailble, mention them. If not, no mention is necessary.
-"""
+    Do not give a long explanation of your capabilities unless asked.
+
+    If any systems are unavailable, mention them. If not, no mention is necessary.
+    """
+
+
+SESSION_INSTRUCTION = build_session_instruction()
 

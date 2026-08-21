@@ -13,7 +13,6 @@ __all__ = [
     "delegate_task",
 ]
 
-
 def __getattr__(name):
     if name == "get_weather":
         from .weather import get_weather

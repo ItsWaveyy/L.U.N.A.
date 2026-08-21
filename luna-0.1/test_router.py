@@ -2,15 +2,18 @@ import asyncio
 
 from core.providers import AIRequest
 from core.router import AIRouter
-from brains.failing import FailingProvider
 from brains.mock import MockProvider
 
 
+class TestRouter(AIRouter):
+    TASK_PREFERENCES = {
+        task: ["mock"]
+        for task in ("coding", "research", "conversation", "general")
+    }
+
+
 async def main():
-    router = AIRouter([
-        FailingProvider(),
-        MockProvider(),
-    ])
+    router = TestRouter([MockProvider()])
 
     tasks = [
         "coding",
