@@ -35,38 +35,28 @@ Do not invent capabilities or actions.
 
 
 class SessionSleepWakeController:
-    """Keep the LiveKit input stream aligned with the core listening state."""
+    """Track L.U.N.A.'s listening state without modifying LiveKit audio yet."""
 
     def __init__(self, session, luna_core: "LunaCore") -> None:
         self.session = session
         self.luna_core = luna_core
-        self.sync_session_input()
-
-    def sync_session_input(self) -> None:
-        input_stream = getattr(self.session, "input", None)
-        if input_stream is None:
-            return
-
-        if hasattr(input_stream, "set_audio_enabled"):
-            # Keep transcription active so a sleeping session can hear its wake phrase.
-            input_stream.set_audio_enabled(True)
 
     def handle_transcript(self, transcript: str | None) -> bool:
         text = (transcript or "").strip()
+
         if not text:
-            self.sync_session_input()
             return self.luna_core.listening
 
-        listening = self.luna_core.update_listening_state(text)
-        self.sync_session_input()
-        return listening
+        return self.luna_core.update_listening_state(text)
 
     def handle_transcription_event(self, event) -> bool:
         transcript = getattr(event, "transcript", None)
+
         if transcript is None and isinstance(event, str):
             transcript = event
         elif transcript is None:
             transcript = getattr(event, "text", "")
+
         return self.handle_transcript(transcript)
 
 

@@ -86,8 +86,11 @@ async def my_agent(ctx: agents.JobContext):
         ),
     )
 
-    sleep_controller.sync_session_input()
-    session.on("user_input_transcribed", sleep_controller.handle_transcription_event)
+    session.on(
+        "user_input_transcribed",
+        sleep_controller.handle_transcription_event,
+    )
+
 
     await session.generate_reply(
         instructions=build_session_instruction()

@@ -32,12 +32,12 @@ async def _run_sleep_wake_session_test():
     controller = SessionSleepWakeController(session, luna)
 
     controller.handle_transcript("that's all for now luna")
+
     assert not luna.listening
-    assert session.input.enabled is True
 
     controller.handle_transcript("luna, wake up")
+
     assert luna.listening
-    assert session.input.enabled is True
 
 
 def test_sleep_wake_session_controller():
