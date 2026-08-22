@@ -15,9 +15,9 @@ def _format_current_weather(payload: dict, city: str) -> str:
 
         parts = [f"Current weather in {city}:"]
         if temp is not None:
-            parts.append(f"{temp}°C")
+            parts.append(f"{temp}°F")
         if feels_like is not None:
-            parts.append(f"feels like {feels_like}°C")
+            parts.append(f"feels like {feels_like}°F")
         if desc:
             parts.append(desc)
         if humidity is not None:
@@ -41,10 +41,10 @@ def _format_forecast(payload: dict, city: str, days: int) -> str:
         lines = [f"{days}-day forecast for {city}:"]
         for day in forecast:
             date = day.get("date", "")
-            maxtemp = day.get("maxtempC")
-            mintemp = day.get("mintempC")
+            maxtemp = day.get("maxtempF")
+            mintemp = day.get("mintempF")
             desc = ((day.get("hourly") or [{}])[0].get("weatherDesc") or [{}])[0].get("value")
-            line = f"{date}: high {maxtemp}°C, low {mintemp}°C"
+            line = f"{date}: high {maxtemp}°F, low {mintemp}°F"
             if desc:
                 line += f", {desc}"
             lines.append(line)
