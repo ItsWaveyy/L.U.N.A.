@@ -3,7 +3,7 @@ import io
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from pydantic import BaseModel
 from kokoro import KPipeline
 
@@ -35,28 +35,41 @@ async def speak(request: SpeechRequest):
     text = request.text.strip()
 
     if not text:
-        raise HTTPException(status_code=400, detail="Text cannot be empty.")
+        raise HTTPException(
+            status_code=400,
+            detail="Text cannot be empty.",
+        )
 
     voice = request.voice or VOICE
 
-    def generate_audio():
-        generator = pipeline(text, voice=voice)
+    audio_chunks = []
 
-        for _, _, audio in generator:
-            audio = np.asarray(audio)
+    generator = pipeline(text, voice=voice)
 
-            buffer = io.BytesIO()
-            sf.write(
-                buffer,
-                audio,
-                SAMPLE_RATE,
-                format="WAV",
-            )
+    for _, _, audio in generator:
+        audio = np.asarray(audio, dtype=np.float32)
+        audio_chunks.append(audio)
 
-            yield buffer.getvalue()
+    if not audio_chunks:
+        raise HTTPException(
+            status_code=500,
+            detail="Kokoro generated no audio.",
+        )
 
-    return StreamingResponse(
-        generate_audio(),
+    audio = np.concatenate(audio_chunks)
+
+    buffer = io.BytesIO()
+
+    sf.write(
+        buffer,
+        audio,
+        SAMPLE_RATE,
+        format="WAV",
+        subtype="PCM_16",
+    )
+
+    return Response(
+        content=buffer.getvalue(),
         media_type="audio/wav",
         headers={
             "X-Luna-TTS-Voice": voice,
