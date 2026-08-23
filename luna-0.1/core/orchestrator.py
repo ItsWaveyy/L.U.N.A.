@@ -3,6 +3,7 @@ import asyncio
 from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
 from core.classifier import TaskClassifier
+from core.standby.manager import StandbyManager
 
 
 CORE_SYSTEM_PROMPT = """
@@ -35,29 +36,27 @@ Do not invent capabilities or actions.
 
 
 class SessionSleepWakeController:
-    """Track L.U.N.A.'s listening state without modifying LiveKit audio yet."""
-
-    def __init__(self, session, luna_core: "LunaCore") -> None:
+    def __init__(self, session, luna_core: "LunaCore"):
         self.session = session
         self.luna_core = luna_core
+        self.standby_manager = StandbyManager(luna_core, session)
 
-    def handle_transcript(self, transcript: str | None) -> bool:
+    async def handle_transcript(self, transcript: str | None) -> bool:
         text = (transcript or "").strip()
 
         if not text:
             return self.luna_core.listening
 
-        return self.luna_core.update_listening_state(text)
+        previous_state = self.luna_core.listening
+        new_state = self.luna_core.update_listening_state(text)
 
-    def handle_transcription_event(self, event) -> bool:
-        transcript = getattr(event, "transcript", None)
+        if previous_state and not new_state:
+            await self.standby_manager.enter_standby()
 
-        if transcript is None and isinstance(event, str):
-            transcript = event
-        elif transcript is None:
-            transcript = getattr(event, "text", "")
+        return new_state
 
-        return self.handle_transcript(transcript)
+    async def shutdown(self):
+        await self.standby_manager.shutdown()
 
 
 class LunaCore:

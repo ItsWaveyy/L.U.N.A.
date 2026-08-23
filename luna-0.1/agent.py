@@ -19,6 +19,8 @@ from livekit.agents.llm import StopResponse
 from livekit.plugins import ai_coustics, google, groq
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
+from core.standby.manager import StandbyManager
+
 from prompts import AGENT_INSTRUCTION, build_session_instruction
 from tools.memory import initialize_database, remember, recall
 
@@ -28,7 +30,10 @@ KOKORO_VOICE = "af_heart"
 
 
 @function_tool()
-async def get_weather(context: RunContext, city: str) -> str:
+async def get_weather(
+    context: RunContext,
+    city: str,
+) -> str:
     from tools.weather import get_weather as _get_weather
     return await _get_weather(context, city)
 
@@ -51,7 +56,12 @@ async def send_email(
     body: str,
 ) -> str:
     from tools.email import send_email as _send_email
-    return await _send_email(context, recipient, subject, body)
+    return await _send_email(
+        context,
+        recipient,
+        subject,
+        body,
+    )
 
 
 @function_tool()
@@ -60,7 +70,10 @@ async def delegate_task(
     task: str = "general",
 ) -> str:
     from tools.delegate import delegate_task as _delegate_task
-    return await _delegate_task(prompt=prompt, task=task)
+    return await _delegate_task(
+        prompt=prompt,
+        task=task,
+    )
 
 
 load_dotenv()
@@ -80,10 +93,13 @@ def synthesize_kokoro(text: str) -> bytes:
     )
 
     response.raise_for_status()
+
     return response.content
 
 
-def wav_to_audio_frames(wav_bytes: bytes):
+def wav_to_audio_frames(
+    wav_bytes: bytes,
+):
     """Convert Kokoro WAV audio into LiveKit AudioFrames."""
 
     with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
@@ -93,17 +109,31 @@ def wav_to_audio_frames(wav_bytes: bytes):
 
         if sample_width != 2:
             raise ValueError(
-                f"Expected 16-bit PCM, got {sample_width * 8}-bit audio."
+                f"Expected 16-bit PCM, "
+                f"got {sample_width * 8}-bit audio."
             )
 
-        pcm_data = wav.readframes(wav.getnframes())
+        pcm_data = wav.readframes(
+            wav.getnframes()
+        )
 
-    samples_per_frame = int(sample_rate * 0.02)
+    samples_per_frame = int(
+        sample_rate * 0.02
+    )
+
     bytes_per_sample = num_channels * 2
-    bytes_per_frame = samples_per_frame * bytes_per_sample
+    bytes_per_frame = (
+        samples_per_frame * bytes_per_sample
+    )
 
-    for start in range(0, len(pcm_data), bytes_per_frame):
-        chunk = pcm_data[start:start + bytes_per_frame]
+    for start in range(
+        0,
+        len(pcm_data),
+        bytes_per_frame,
+    ):
+        chunk = pcm_data[
+            start:start + bytes_per_frame
+        ]
 
         if not chunk:
             continue
@@ -142,7 +172,11 @@ class Assistant(Agent):
         turn_ctx,
         new_message,
     ) -> None:
-        transcript = getattr(new_message, "text_content", None)
+        transcript = getattr(
+            new_message,
+            "text_content",
+            None,
+        )
 
         if callable(transcript):
             transcript = transcript()
@@ -154,7 +188,9 @@ class Assistant(Agent):
                 "",
             )
 
-        self.sleep_controller.handle_transcript(transcript)
+        await self.sleep_controller.handle_transcript(
+            transcript
+        )
 
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
@@ -171,7 +207,9 @@ class Assistant(Agent):
         async for chunk in text:
             text_parts.append(chunk)
 
-        full_text = "".join(text_parts).strip()
+        full_text = "".join(
+            text_parts
+        ).strip()
 
         if not full_text:
             return
@@ -181,15 +219,21 @@ class Assistant(Agent):
             full_text,
         )
 
-        for frame in wav_to_audio_frames(wav_bytes):
+        for frame in wav_to_audio_frames(
+            wav_bytes
+        ):
             yield frame
 
 
 server = AgentServer()
 
 
-@server.rtc_session(agent_name="my-agent")
-async def my_agent(ctx: agents.JobContext):
+@server.rtc_session(
+    agent_name="my-agent"
+)
+async def my_agent(
+    ctx: agents.JobContext,
+):
     session = AgentSession(
         stt=groq.STT(),
         llm=google.LLM(
@@ -199,18 +243,30 @@ async def my_agent(ctx: agents.JobContext):
 
     luna_core = LunaCore([])
 
+    standby_manager = StandbyManager(
+        luna_core=luna_core,
+        session=session,
+    )
+
     sleep_controller = SessionSleepWakeController(
-        session,
-        luna_core,
+        session=session,
+        luna_core=luna_core,
+        standby_manager=standby_manager,
     )
 
     await session.start(
         room=ctx.room,
-        agent=Assistant(sleep_controller),
+        agent=Assistant(
+            sleep_controller
+        ),
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
-                noise_cancellation=ai_coustics.audio_enhancement(
-                    model=ai_coustics.EnhancerModel.QUAIL_VF_S,
+                noise_cancellation=(
+                    ai_coustics.audio_enhancement(
+                        model=(
+                            ai_coustics.EnhancerModel.QUAIL_VF_S
+                        ),
+                    )
                 ),
             ),
         ),
