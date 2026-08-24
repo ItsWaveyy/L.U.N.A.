@@ -7,7 +7,7 @@ async def main():
     detector = WakeDetector()
 
     print("L.U.N.A. wake detector online.")
-    print("Say: HEY LIVEKIT")
+    print("Say: HEY LUNA")
 
     detection = await detector.wait_for_wake()
 

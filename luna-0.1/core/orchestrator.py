@@ -1,4 +1,5 @@
 import asyncio
+import re
 
 from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
@@ -35,31 +36,125 @@ Do not invent capabilities or actions.
 """
 
 
+def normalize(text: str) -> str:
+    """Normalize speech-recognition text for phrase matching."""
+
+    text = (text or "").lower().strip()
+
+    # Normalize apostrophes.
+    text = text.replace("’", "'")
+
+    # Remove punctuation while preserving spaces.
+    text = re.sub(r"[^a-z0-9\s']", " ", text)
+
+    # Collapse repeated whitespace.
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip()
+
+
 class SessionSleepWakeController:
-    def __init__(self, session, luna_core: "LunaCore"):
+    """
+    Controls L.U.N.A.'s listening state for a LiveKit session.
+
+    While awake:
+        transcripts are allowed to reach the LLM normally.
+
+    While asleep:
+        transcripts are intercepted and checked only for wake phrases.
+        No Gemini request is made.
+    """
+
+    def __init__(
+        self,
+        session,
+        luna_core: "LunaCore",
+        standby_manager: StandbyManager,
+    ):
         self.session = session
         self.luna_core = luna_core
-        self.standby_manager = StandbyManager(luna_core, session)
+        self.standby_manager = standby_manager
 
-    async def handle_transcript(self, transcript: str | None) -> bool:
-        text = (transcript or "").strip()
+    async def handle_transcript(self, transcript: str):
+        text = normalize(transcript)
 
         if not text:
-            return self.luna_core.listening
+            return
 
-        previous_state = self.luna_core.listening
-        new_state = self.luna_core.update_listening_state(text)
+        # ---------------------------------------------------------
+        # STANDBY MODE
+        # ---------------------------------------------------------
 
-        if previous_state and not new_state:
-            await self.standby_manager.enter_standby()
+        # The dedicated ONNX WakeDetector owns wake-word detection.
+        #
+        # While in standby, ignore STT transcripts completely.
+        # The microphone remains active, but no Gemini request is made.
 
-        return new_state
+        if not self.luna_core.listening:
+            return
+
+        # ---------------------------------------------------------
+        # ACTIVE MODE
+        # ---------------------------------------------------------
+
+        if self.is_sleep_phrase(text):
+            await self.sleep()
+
+    async def handle_transcription_event(self, event) -> None:
+        transcript = getattr(event, "transcript", None)
+
+        if transcript is None and isinstance(event, str):
+            transcript = event
+
+        elif transcript is None:
+            transcript = getattr(event, "text", "")
+
+        await self.handle_transcript(transcript)
+
+    def is_sleep_phrase(self, text: str) -> bool:
+        return self.luna_core._contains_phrase(
+            normalize(text),
+            self.luna_core.SLEEP_PHRASES,
+        )
+
+    def is_wake_phrase(self, text: str) -> bool:
+        return self.luna_core._contains_phrase(
+            normalize(text),
+            self.luna_core.WAKE_PHRASES,
+        )
+
+    async def sleep(self):
+        if not self.luna_core.listening:
+            return
+
+        print("[L.U.N.A.] Sleep phrase detected.")
+
+        await self.standby_manager.enter_standby()
+
+    async def wake(self, transcript: str):
+        if self.luna_core.listening:
+            return
+
+        print(
+            f'[L.U.N.A.] Wake phrase detected: "{transcript}"'
+        )
+
+        self.luna_core.set_listening(True)
+
+        print("[L.U.N.A.] Listening state: False -> True")
+        print("[L.U.N.A.] Standby mode ended.")
+
+        # Do not manually generate a reply here.
+        #
+        # The wake transcript itself is allowed to continue through
+        # the normal LiveKit turn pipeline once we return.
 
     async def shutdown(self):
         await self.standby_manager.shutdown()
 
 
 class LunaCore:
+
     SLEEP_PHRASES = (
         "that's all for now",
         "that is all for now",
@@ -70,24 +165,38 @@ class LunaCore:
         "stop listening",
         "pause listening",
         "rest for a bit",
+        "that's it for now",
+        "that is it for now",
+        "you're all done for now",
+        "you are all done for now",
     )
 
     WAKE_PHRASES = (
         "luna wake up",
         "wake up luna",
-        "resume listening",
-        "start listening again",
-        "you can listen again",
-        "back online",
-        "come back",
-        "luna, wake up",
-        "wake up",
+        "hey luna",
+        "hi luna",
+        "hello luna",
+        "luna are you there",
+        "luna you there",
+        "are you there luna",
+        "luna are you awake",
+        "are you awake luna",
+        "luna wakey wakey",
+        "back online luna",
+        "luna back online",
+        "resume listening luna",
+        "luna resume listening",
+        "hey luna",
+        "hey, luna",
     )
 
     def __init__(self, providers: list[AIProvider]):
         self.router = AIRouter(providers)
         self.classifier = TaskClassifier()
+
         self.listening = True
+
         self._warmup_task = None
         self._start_warmup_if_possible()
 
@@ -98,37 +207,66 @@ class LunaCore:
             return
 
         if self._warmup_task is None:
-            self._warmup_task = loop.create_task(self.warmup_providers())
+            self._warmup_task = loop.create_task(
+                self.warmup_providers()
+            )
 
     def set_listening(self, state: bool) -> bool:
         self.listening = bool(state)
         return self.listening
 
-    def _contains_phrase(self, text: str, phrases: tuple[str, ...]) -> bool:
-        lowered = text.lower()
-        return any(phrase in lowered for phrase in phrases)
+    def _contains_phrase(
+        self,
+        text: str,
+        phrases: tuple[str, ...],
+    ) -> bool:
 
-    def update_listening_state(self, prompt: str) -> bool:
-        text = (prompt or "").strip()
+        lowered = normalize(text)
+
+        return any(
+            phrase in lowered
+            for phrase in phrases
+        )
+
+    def update_listening_state(
+        self,
+        prompt: str,
+    ) -> bool:
+
+        text = normalize(prompt)
 
         if not text:
             return self.listening
 
-        if self._contains_phrase(text, self.SLEEP_PHRASES):
+        if self._contains_phrase(
+            text,
+            self.SLEEP_PHRASES,
+        ):
             self.listening = False
             return False
 
-        if self._contains_phrase(text, self.WAKE_PHRASES):
+        if self._contains_phrase(
+            text,
+            self.WAKE_PHRASES,
+        ):
             self.listening = True
             return True
 
         return self.listening
 
-    async def warmup_providers(self, timeout: float = 3.0) -> None:
-        """Warm the providers in the background without blocking startup."""
+    async def warmup_providers(
+        self,
+        timeout: float = 3.0,
+    ) -> None:
+
         for provider in self.router.providers:
+
             try:
-                await asyncio.wait_for(provider.health_check(), timeout=timeout)
+                await asyncio.wait_for(
+                    provider.health_check(),
+                    timeout=timeout,
+                )
+
             except Exception:
                 continue
 
@@ -139,52 +277,82 @@ class LunaCore:
         system_prompt: str | None = None,
     ) -> AIResponse:
 
-        text = (prompt or "").strip()
+        text = normalize(prompt)
+
         if not text:
             return AIResponse(
                 text="I didn't hear anything.",
                 provider="system",
                 model="listening-state",
-                metadata={"listening": self.listening},
+                metadata={
+                    "listening": self.listening
+                },
             )
 
+        # ---------------------------------------------------------
+        # STANDBY
+        # ---------------------------------------------------------
+
         if not self.listening:
-            if self._contains_phrase(text, self.WAKE_PHRASES):
+
+            if self._contains_phrase(
+                text,
+                self.WAKE_PHRASES,
+            ):
                 self.listening = True
+
             else:
                 return AIResponse(
-                    text="Luna is taking a break. Say “Luna, wake up” to resume listening.",
+                    text="",
                     provider="system",
                     model="listening-state",
                     metadata={
                         "listening": False,
-                        "classified_task": task or "general",
+                        "classified_task": (
+                            task or "general"
+                        ),
                     },
                 )
 
-        if self._contains_phrase(text, self.SLEEP_PHRASES):
+        # ---------------------------------------------------------
+        # SLEEP
+        # ---------------------------------------------------------
+
+        if self._contains_phrase(
+            text,
+            self.SLEEP_PHRASES,
+        ):
+
             self.listening = False
+
             return AIResponse(
-                text="Luna is taking a break. Say “Luna, wake up” to resume listening.",
+                text="",
                 provider="system",
                 model="listening-state",
                 metadata={
                     "listening": False,
-                    "classified_task": task or "general",
+                    "classified_task": (
+                        task or "general"
+                    ),
                 },
             )
 
-        # Automatically classify the request unless
-        # the caller explicitly provides a task.
+        # ---------------------------------------------------------
+        # NORMAL REQUEST
+        # ---------------------------------------------------------
+
         if task is None:
-            classification = self.classifier.classify(prompt)
+            classification = self.classifier.classify(
+                prompt
+            )
             task = classification.task
 
         combined_system_prompt = CORE_SYSTEM_PROMPT
 
         if system_prompt:
             combined_system_prompt += (
-                f"\n\nAdditional instructions:\n{system_prompt}"
+                "\n\nAdditional instructions:\n"
+                f"{system_prompt}"
             )
 
         request = AIRequest(
@@ -193,7 +361,9 @@ class LunaCore:
             system_prompt=combined_system_prompt,
         )
 
-        response = await self.router.generate(request)
+        response = await self.router.generate(
+            request
+        )
 
         response.metadata.update({
             "classified_task": task,
@@ -208,14 +378,18 @@ class LunaCore:
         status = {}
 
         for provider in self.router.providers:
+
             try:
-                status[provider.name] = await provider.health_check()
+                status[provider.name] = (
+                    await provider.health_check()
+                )
 
             except Exception as exc:
                 print(
-                    f"[L.U.N.A.] Health check failed for "
+                    "[L.U.N.A.] Health check failed for "
                     f"'{provider.name}': {exc}"
                 )
+
                 status[provider.name] = False
 
         return status

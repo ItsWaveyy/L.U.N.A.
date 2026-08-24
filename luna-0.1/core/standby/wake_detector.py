@@ -3,14 +3,14 @@ import asyncio
 from livekit.wakeword import WakeWordListener, WakeWordModel
 
 
-MODEL_PATH = "data/wakeword/hey_livekit.onnx"
+MODEL_PATH = "output/hey_luna/hey_luna.onnx"
 
 
 class WakeDetector:
     def __init__(
         self,
         model_path: str = MODEL_PATH,
-        threshold: float = 0.5,
+        threshold: float = 0.94,
         debounce: float = 2.0,
     ):
         self.model = WakeWordModel(models=[model_path])

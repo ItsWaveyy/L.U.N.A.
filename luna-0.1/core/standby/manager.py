@@ -4,20 +4,36 @@ from core.standby.wake_detector import WakeDetector
 
 
 class StandbyManager:
-    """Controls L.U.N.A.'s sleep/standby lifecycle."""
+    """
+    Controls L.U.N.A.'s standby lifecycle.
 
-    def __init__(self, luna_core, session):
+    Standby keeps the LiveKit session and microphone active.
+
+    The dedicated WakeDetector listens for the "Hey Luna" wake word
+    using the local ONNX wake-word model.
+    """
+
+    def __init__(
+        self,
+        luna_core,
+        session,
+    ):
         self.luna_core = luna_core
         self.session = session
-        self.detector = WakeDetector()
 
-        self._standby_task = None
+        self.wake_detector = WakeDetector()
+
+        self._wake_task = None
         self._stop_event = asyncio.Event()
         self._wake_detector_active = False
 
     @property
     def in_standby(self) -> bool:
         return not self.luna_core.listening
+
+    @property
+    def wake_detector_active(self) -> bool:
+        return self._wake_detector_active
 
     async def enter_standby(self) -> None:
         if self.in_standby:
@@ -27,38 +43,41 @@ class StandbyManager:
 
         self.luna_core.set_listening(False)
 
-        if self.session is not None:
-            self.session.input.set_audio_enabled(False)
-
         self._stop_event.clear()
-
-        self._standby_task = asyncio.create_task(
-            self._standby_loop()
-        )
-
-    async def _standby_loop(self) -> None:
-        print("[L.U.N.A.] Wake detector active.")
         self._wake_detector_active = True
 
+        self._wake_task = asyncio.create_task(
+            self._wait_for_wake()
+        )
+
+        print("[L.U.N.A.] Standby mode active.")
+        print("[L.U.N.A.] Wake detection available.")
+
+    async def _wait_for_wake(self) -> None:
         try:
-            while not self._stop_event.is_set():
-                detection = await self.detector.wait_for_wake()
+            detection = await self.wake_detector.wait_for_wake()
 
-                if detection is None:
-                    continue
+            if self._stop_event.is_set():
+                return
 
-                await self.wake()
-                break
+            print(
+                f"[L.U.N.A.] Wake word detected: "
+                f"{detection.name} "
+                f"({detection.confidence:.2f})"
+            )
+
+            await self.wake()
 
         except asyncio.CancelledError:
-            pass
+            raise
+
+        except Exception as exc:
+            print(
+                f"[L.U.N.A.] Wake detector error: {exc}"
+            )
 
         finally:
             self._wake_detector_active = False
-
-    @property
-    def wake_detector_active(self) -> bool:
-        return self._wake_detector_active
 
     async def wake(self) -> None:
         if not self.in_standby:
@@ -67,9 +86,7 @@ class StandbyManager:
         print("[L.U.N.A.] Waking...")
 
         self._stop_event.set()
-
-        if self.session is not None:
-            self.session.input.set_audio_enabled(True)
+        self._wake_detector_active = False
 
         self.luna_core.set_listening(True)
 
@@ -77,13 +94,15 @@ class StandbyManager:
 
     async def shutdown(self) -> None:
         self._stop_event.set()
+        self._wake_detector_active = False
 
-        if self._standby_task:
-            self._standby_task.cancel()
+        if self._wake_task:
+            self._wake_task.cancel()
 
             try:
-                await self._standby_task
+                await self._wake_task
+
             except asyncio.CancelledError:
                 pass
 
-            self._standby_task = None
+            self._wake_task = None

@@ -24,3 +24,8 @@
 7. Then reinstall your requirements:
 
     python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+
+
+Kokoro activatation:
+
+    python -m uvicorn services.kokoro.server:app --host 127.0.0.1 --port 8880

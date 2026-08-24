@@ -167,30 +167,16 @@ class Assistant(Agent):
             ],
         )
 
-    async def on_user_turn_completed(
-        self,
-        turn_ctx,
-        new_message,
-    ) -> None:
-        transcript = getattr(
-            new_message,
-            "text_content",
-            None,
-        )
+    async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
+        transcript = getattr(new_message, "text_content", None)
 
         if callable(transcript):
             transcript = transcript()
 
         if transcript is None:
-            transcript = getattr(
-                new_message,
-                "raw_text_content",
-                "",
-            )
+            transcript = getattr(new_message, "raw_text_content", "")
 
-        await self.sleep_controller.handle_transcript(
-            transcript
-        )
+        await self.sleep_controller.handle_transcript(transcript)
 
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
@@ -237,7 +223,7 @@ async def my_agent(
     session = AgentSession(
         stt=groq.STT(),
         llm=google.LLM(
-            model="gemini-3-flash-preview",
+            model="gemini-3.1-flash-lite",
         ),
     )
 
@@ -254,28 +240,32 @@ async def my_agent(
         standby_manager=standby_manager,
     )
 
-    await session.start(
-        room=ctx.room,
-        agent=Assistant(
-            sleep_controller
-        ),
-        room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=(
-                    ai_coustics.audio_enhancement(
-                        model=(
-                            ai_coustics.EnhancerModel.QUAIL_VF_S
-                        ),
-                    )
+    try:
+        await session.start(
+            room=ctx.room,
+            agent=Assistant(
+                sleep_controller
+            ),
+            room_options=room_io.RoomOptions(
+                audio_input=room_io.AudioInputOptions(
+                    noise_cancellation=(
+                        ai_coustics.audio_enhancement(
+                            model=(
+                                ai_coustics.EnhancerModel.QUAIL_VF_S
+                            ),
+                        )
+                    ),
                 ),
             ),
-        ),
-    )
+        )
 
-    session.on(
-        "user_input_transcribed",
-        sleep_controller.handle_transcription_event,
-    )
+        await session.generate_reply(
+            instructions=build_session_instruction(),
+        )
+
+    finally:
+        await standby_manager.shutdown()
+
 
     await session.generate_reply(
         instructions=build_session_instruction(),
