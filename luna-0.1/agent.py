@@ -14,9 +14,13 @@ from livekit.agents import (
     room_io,
     function_tool,
     RunContext,
+    TurnHandlingOptions,
+    EndpointingOptions,
+    InterruptionOptions,
 )
 from livekit.agents.llm import StopResponse
 from livekit.plugins import ai_coustics, google, groq
+from livekit.plugins import silero
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
 from core.standby.manager import StandbyManager
@@ -35,7 +39,11 @@ async def get_weather(
     city: str,
 ) -> str:
     from tools.weather import get_weather as _get_weather
-    return await _get_weather(context, city)
+
+    return await _get_weather(
+        context,
+        city,
+    )
 
 
 @function_tool()
@@ -45,7 +53,12 @@ async def get_weather_forecast(
     days: int = 3,
 ) -> str:
     from tools.weather import get_weather as _get_weather
-    return await _get_weather(context, city, days=days)
+
+    return await _get_weather(
+        context,
+        city,
+        days=days,
+    )
 
 
 @function_tool()
@@ -56,6 +69,7 @@ async def send_email(
     body: str,
 ) -> str:
     from tools.email import send_email as _send_email
+
     return await _send_email(
         context,
         recipient,
@@ -70,6 +84,7 @@ async def delegate_task(
     task: str = "general",
 ) -> str:
     from tools.delegate import delegate_task as _delegate_task
+
     return await _delegate_task(
         prompt=prompt,
         task=task,
@@ -102,7 +117,10 @@ def wav_to_audio_frames(
 ):
     """Convert Kokoro WAV audio into LiveKit AudioFrames."""
 
-    with wave.open(io.BytesIO(wav_bytes), "rb") as wav:
+    with wave.open(
+        io.BytesIO(wav_bytes),
+        "rb",
+    ) as wav:
         sample_rate = wav.getframerate()
         num_channels = wav.getnchannels()
         sample_width = wav.getsampwidth()
@@ -122,8 +140,10 @@ def wav_to_audio_frames(
     )
 
     bytes_per_sample = num_channels * 2
+
     bytes_per_frame = (
-        samples_per_frame * bytes_per_sample
+        samples_per_frame
+        * bytes_per_sample
     )
 
     for start in range(
@@ -138,7 +158,10 @@ def wav_to_audio_frames(
         if not chunk:
             continue
 
-        samples = len(chunk) // bytes_per_sample
+        samples = (
+            len(chunk)
+            // bytes_per_sample
+        )
 
         yield rtc.AudioFrame(
             data=chunk,
@@ -167,16 +190,30 @@ class Assistant(Agent):
             ],
         )
 
-    async def on_user_turn_completed(self, turn_ctx, new_message) -> None:
-        transcript = getattr(new_message, "text_content", None)
+    async def on_user_turn_completed(
+        self,
+        turn_ctx,
+        new_message,
+    ) -> None:
+        transcript = getattr(
+            new_message,
+            "text_content",
+            None,
+        )
 
         if callable(transcript):
             transcript = transcript()
 
         if transcript is None:
-            transcript = getattr(new_message, "raw_text_content", "")
+            transcript = getattr(
+                new_message,
+                "raw_text_content",
+                "",
+            )
 
-        await self.sleep_controller.handle_transcript(transcript)
+        await self.sleep_controller.handle_transcript(
+            transcript
+        )
 
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
@@ -222,6 +259,34 @@ async def my_agent(
 ):
     session = AgentSession(
         stt=groq.STT(),
+
+        vad=silero.VAD.load(
+            min_speech_duration=0.05,
+            min_silence_duration=0.55,
+            prefix_padding_duration=0.5,
+            activation_threshold=0.5,
+        ),
+
+        turn_handling=TurnHandlingOptions(
+            endpointing=EndpointingOptions(
+                mode="dynamic",
+                min_delay=0.9,
+                max_delay=3.0,
+                alpha=0.5,
+            ),
+
+            interruption=InterruptionOptions(
+                enabled=True,
+                mode="vad",
+                discard_audio_if_uninterruptible=False,
+                min_duration=0.35,
+                min_words=2,
+                resume_false_interruption=True,
+                false_interruption_timeout=2.0,
+                backchannel_boundary=(0.2, 0.8),
+            ),
+        ),
+
         llm=google.LLM(
             model="gemini-3.1-flash-lite",
         ),
@@ -265,6 +330,7 @@ async def my_agent(
 
     finally:
         await standby_manager.shutdown()
+
 
 if __name__ == "__main__":
     agents.cli.run_app(server)

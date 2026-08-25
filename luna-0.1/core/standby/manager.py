@@ -146,7 +146,6 @@ class StandbyManager:
 
         # Stop the wake detector before giving the microphone
         # back to LiveKit.
-        self._stop_event.set()
 
         if self._wake_task:
             self._wake_task.cancel()
