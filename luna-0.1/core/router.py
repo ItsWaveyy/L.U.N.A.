@@ -1,4 +1,4 @@
-from core.providers import AIProvider, AIRequest, AIResponse
+from core.providers.base import AIProvider, AIRequest, AIResponse
 
 
 class AIRouter:
