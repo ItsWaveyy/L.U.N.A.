@@ -95,6 +95,9 @@ class StandbyManager:
         # Completely detach LiveKit from the microphone.
         self._disable_livekit_audio()
 
+        # Give CoreAudio a moment to release the microphone.
+        await asyncio.sleep(0.25)
+
         # Start dedicated wake detection.
         self._stop_event.clear()
         self._wake_detector_active = True
@@ -141,12 +144,27 @@ class StandbyManager:
         self._stop_event.set()
         self._wake_detector_active = False
 
+        # Stop the wake detector before giving the microphone
+        # back to LiveKit.
+        self._stop_event.set()
+
+        if self._wake_task:
+            self._wake_task.cancel()
+
+            try:
+                await self._wake_task
+            except asyncio.CancelledError:
+                pass
+
+            self._wake_task = None
+
+        # Give CoreAudio a moment to release the wake detector.
+        await asyncio.sleep(0.25)
+
         # Give the microphone back to LiveKit.
         self._enable_livekit_audio()
 
         self.luna_core.set_listening(True)
-
-        print("[L.U.N.A.] Standby ended.")
 
     async def shutdown(self) -> None:
         self._stop_event.set()

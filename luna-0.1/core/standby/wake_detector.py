@@ -10,7 +10,7 @@ class WakeDetector:
     def __init__(
         self,
         model_path: str = MODEL_PATH,
-        threshold: float = 0.97,
+        threshold: float = 0.80,
         debounce: float = 2.0,
     ):
         self.model = WakeWordModel(models=[model_path])
