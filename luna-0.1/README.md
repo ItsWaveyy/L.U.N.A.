@@ -14,11 +14,11 @@ The goal is simple:
 
 ## Current Status
 
-**Version:** v0.01.8.5  
+**Version:** v0.05.0  
 **Development:** Active
 
 L.U.N.A. currently has a working realtime voice interface powered by
-LiveKit and Google Gemini, alongside an experimental provider architecture
+Kokoro alongside an experimental provider architecture
 designed to support multiple AI brains and automatic fallback.
 
 ---
