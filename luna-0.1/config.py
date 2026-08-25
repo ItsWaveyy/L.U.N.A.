@@ -3,6 +3,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+LUNA_MODE = os.getenv(
+    "LUNA_MODE",
+    "auto",
+).lower()
+
+if LUNA_MODE not in {
+    "auto",
+    "online",
+    "offline",
+}:
+    LUNA_MODE = "auto"
+
 # L.U.N.A. configuration
 
 LUNA_NAME = "Luna"

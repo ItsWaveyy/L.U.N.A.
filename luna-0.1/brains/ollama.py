@@ -1,4 +1,4 @@
-import requests
+import httpx
 
 from config import OLLAMA_BASE_URL
 from core.providers import AIProvider, AIRequest, AIResponse
@@ -29,16 +29,19 @@ class OllamaProvider(AIProvider):
             {
                 "role": "system",
                 "content": """
-    You are L.U.N.A.'s local utility brain.
+You are L.U.N.A.'s local utility brain.
 
-    You handle fast, simple tasks and short conversational requests.
+You are running locally through Ollama.
+You may be operating completely offline.
 
-    Be concise.
-    Answer directly.
-    Do not explain simple answers unless explanation is requested.
-    Do not use emojis unless they are appropriate.
-    Do not add unnecessary introductions or conclusions.
-    """,
+Handle fast, simple tasks and short conversational requests.
+
+Be concise.
+Answer directly.
+Do not explain simple answers unless explanation is requested.
+Do not invent current information when operating offline.
+Do not claim to have internet access.
+""",
             }
         ]
 
@@ -53,15 +56,22 @@ class OllamaProvider(AIProvider):
             "content": request.prompt,
         })
 
-        response = requests.post(
-            f"{self.base_url}/api/chat",
-            json={
-                "model": self.model,
-                "messages": messages,
-                "stream": False,
-            },
-            timeout=120,
-        )
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                connect=3.0,
+                read=120.0,
+                write=10.0,
+                pool=5.0,
+            )
+        ) as client:
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": messages,
+                    "stream": False,
+                },
+            )
 
         response.raise_for_status()
 
@@ -71,16 +81,21 @@ class OllamaProvider(AIProvider):
             text=data["message"]["content"],
             provider=self.name,
             model=self.model,
+            metadata={
+                "offline_capable": True,
+            },
         )
 
     async def health_check(self) -> bool:
         try:
-            response = requests.get(
-                f"{self.base_url}/api/tags",
-                timeout=5,
-            )
+            async with httpx.AsyncClient(
+                timeout=3.0
+            ) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/tags"
+                )
 
-            return response.ok
+            return response.is_success
 
         except Exception:
             return False

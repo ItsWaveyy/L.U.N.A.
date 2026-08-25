@@ -1,7 +1,13 @@
+import os
+
 from core.providers.base import AIProvider, AIRequest, AIResponse
 
 
 class AIRouter:
+    @property
+    def mode(self) -> str:
+        return os.getenv("LUNA_MODE", "auto").lower()
+
     """Selects the best available AI provider and handles fallback."""
 
     TASK_PREFERENCES = {
@@ -38,7 +44,12 @@ class AIRouter:
 
                 response.metadata.update({
                     "task": request.task,
-                    "routing": "task_preference",
+                    "routing": (
+                        "offline"
+                        if self.mode == "offline"
+                        else "task_preference"
+                    ),
+                    "mode": self.mode,
                     "provider_attempts": len(attempted_providers),
                     "providers_tried": attempted_providers,
                 })
@@ -83,6 +94,7 @@ class AIRouter:
         self,
         task: str,
     ) -> list[AIProvider]:
+
         preferences = self.TASK_PREFERENCES.get(
             task,
             self.TASK_PREFERENCES["general"],
@@ -95,6 +107,23 @@ class AIRouter:
 
         ranked = []
 
+        # ---------------------------------------------------------
+        # OFFLINE MODE
+        # ---------------------------------------------------------
+
+        if self.mode == "offline":
+            local = available.get("local")
+
+            if local is not None:
+                if task in local.capabilities:
+                    return [local]
+
+            return []
+
+        # ---------------------------------------------------------
+        # NORMAL MODE
+        # ---------------------------------------------------------
+
         for provider_name in preferences:
             provider = available.get(provider_name)
 
@@ -105,5 +134,18 @@ class AIRouter:
                 continue
 
             ranked.append(provider)
+
+        # ---------------------------------------------------------
+        # GUARANTEED LOCAL FALLBACK
+        # ---------------------------------------------------------
+
+        local = available.get("local")
+
+        if (
+            local is not None
+            and task in local.capabilities
+            and local not in ranked
+        ):
+            ranked.append(local)
 
         return ranked
