@@ -198,14 +198,12 @@ class LunaCore:
         "hey, luna",
     )
 
-    def __init__(self, providers: list[AIProvider]):
+    def __init__(self, providers: list[AIProvider] | None = None):
+        if providers is None:
+            from core.brain_registry import load_providers
+            providers = load_providers()
+
         self.router = AIRouter(providers)
-        self.classifier = TaskClassifier()
-
-        self.listening = True
-
-        self._warmup_task = None
-        self._start_warmup_if_possible()
 
     def _start_warmup_if_possible(self) -> None:
         try:

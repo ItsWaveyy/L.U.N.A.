@@ -18,6 +18,9 @@ class OllamaProvider(AIProvider):
         return {
             "general",
             "conversation",
+            "coding",
+            "research",
+            "creative",
             "fast",
         }
 

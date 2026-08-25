@@ -227,7 +227,7 @@ async def my_agent(
         ),
     )
 
-    luna_core = LunaCore([])
+    luna_core = LunaCore()
 
     standby_manager = StandbyManager(
         luna_core=luna_core,
