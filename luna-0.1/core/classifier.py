@@ -16,19 +16,62 @@ class Classification:
     task: str
     confidence: float
     reason: str
+    requires_network: bool = False
 
 
 class TaskClassifier:
     """Classifies user requests into L.U.N.A. Core task categories."""
 
+    def requires_network(self, prompt: str) -> tuple[bool, str]:
+        text = prompt.lower().strip()
+
+        network_keywords = (
+            "today",
+            "tonight",
+            "tomorrow",
+            "yesterday",
+            "latest",
+            "recent",
+            "currently",
+            "current",
+            "right now",
+            "this week",
+            "this month",
+            "this year",
+            "news",
+            "weather",
+            "forecast",
+            "temperature",
+            "stock price",
+            "stock market",
+            "traffic",
+            "score",
+            "scores",
+            "live",
+            "real time",
+            "real-time",
+            "what happened",
+            "what's happening",
+            "who won",
+            "who is winning",
+        )
+
+        for keyword in network_keywords:
+            if keyword in text:
+                return True, f"Detected live/current information request: '{keyword}'."
+
+        return False, "Request does not require live information."
+
     def classify(self, prompt: str) -> Classification:
         text = prompt.lower().strip()
+        requires_network, network_reason = self.requires_network(text)
 
         if not text:
             return Classification(
                 task="general",
                 confidence=1.0,
                 reason="Empty prompt.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -68,6 +111,7 @@ class TaskClassifier:
                 task="coding",
                 confidence=0.95,
                 reason="Detected coding-related terminology.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -96,6 +140,7 @@ class TaskClassifier:
                 task="creative",
                 confidence=0.90,
                 reason="Detected a creative-generation request.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -127,6 +172,7 @@ class TaskClassifier:
                 task="research",
                 confidence=0.90,
                 reason="Detected research or current-information terminology.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -151,6 +197,7 @@ class TaskClassifier:
                 task="conversation",
                 confidence=0.85,
                 reason="Detected an open-ended conversational request.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -178,6 +225,7 @@ class TaskClassifier:
                 task="fast",
                 confidence=0.85,
                 reason="Detected a short factual or utility request.",
+                requires_network=requires_network,
             )
 
         # ---------------------------------------------------------
@@ -187,4 +235,5 @@ class TaskClassifier:
             task="general",
             confidence=0.60,
             reason="No specialized task pattern detected.",
+            requires_network=requires_network,
         )

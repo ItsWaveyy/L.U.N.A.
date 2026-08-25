@@ -26,6 +26,33 @@ class AIRouter:
         self,
         request: AIRequest,
     ) -> AIResponse:
+
+        requires_network = request.metadata.get(
+            "requires_network",
+            False,
+        )
+
+        # ---------------------------------------------------------
+        # OFFLINE + NETWORK REQUIRED
+        # ---------------------------------------------------------
+
+        if requires_network and self.mode == "offline":
+            return AIResponse(
+                text=(
+                    "I'm offline right now, sir. "
+                    "I can't access live information."
+                ),
+                provider="system",
+                model="offline-awareness",
+                metadata={
+                    "task": request.task,
+                    "requires_network": True,
+                    "offline": True,
+                    "routing": "offline_blocked",
+                    "mode": self.mode,
+                },
+            )
+
         candidates = self._rank_providers(request.task)
 
         if not candidates:
@@ -44,6 +71,7 @@ class AIRouter:
 
                 response.metadata.update({
                     "task": request.task,
+                    "requires_network": requires_network,
                     "routing": (
                         "offline"
                         if self.mode == "offline"
@@ -56,7 +84,9 @@ class AIRouter:
 
                 if index > 0:
                     response.metadata["fallback_used"] = True
-                    response.metadata["fallback_from"] = candidates[0].name
+                    response.metadata["fallback_from"] = (
+                        candidates[0].name
+                    )
                 else:
                     response.metadata["fallback_used"] = False
 

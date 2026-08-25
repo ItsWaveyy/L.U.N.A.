@@ -204,6 +204,9 @@ class LunaCore:
             providers = load_providers()
 
         self.router = AIRouter(providers)
+        self.classifier = TaskClassifier()
+        self.listening = True
+        self._warmup_task = None
 
     def _start_warmup_if_possible(self) -> None:
         try:
@@ -347,10 +350,10 @@ class LunaCore:
         # ---------------------------------------------------------
 
         if task is None:
-            classification = self.classifier.classify(
-                prompt
-            )
+            classification = self.classifier.classify(prompt)
             task = classification.task
+        else:
+            classification = None
 
         combined_system_prompt = CORE_SYSTEM_PROMPT
 
@@ -364,6 +367,13 @@ class LunaCore:
             prompt=prompt,
             task=task,
             system_prompt=combined_system_prompt,
+            metadata={
+                "requires_network": (
+                    classification.requires_network
+                    if classification is not None
+                    else False
+                ),
+            },
         )
 
         response = await self.router.generate(
