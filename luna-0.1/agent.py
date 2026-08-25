@@ -266,11 +266,5 @@ async def my_agent(
     finally:
         await standby_manager.shutdown()
 
-
-    await session.generate_reply(
-        instructions=build_session_instruction(),
-    )
-
-
 if __name__ == "__main__":
     agents.cli.run_app(server)

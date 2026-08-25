@@ -10,7 +10,7 @@ class WakeDetector:
     def __init__(
         self,
         model_path: str = MODEL_PATH,
-        threshold: float = 0.94,
+        threshold: float = 0.97,
         debounce: float = 2.0,
     ):
         self.model = WakeWordModel(models=[model_path])
@@ -25,11 +25,4 @@ class WakeDetector:
         async with self.listener:
             while True:
                 detection = await self.listener.wait_for_detection()
-
-                print(
-                    f"[L.U.N.A.] Wake word detected: "
-                    f"{detection.name} "
-                    f"({detection.confidence:.2f})"
-                )
-
                 return detection

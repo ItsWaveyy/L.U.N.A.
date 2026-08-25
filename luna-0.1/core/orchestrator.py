@@ -74,6 +74,7 @@ class SessionSleepWakeController:
         self.session = session
         self.luna_core = luna_core
         self.standby_manager = standby_manager
+        self._just_woke = False
 
     async def handle_transcript(self, transcript: str):
         text = normalize(transcript)
@@ -85,13 +86,22 @@ class SessionSleepWakeController:
         # STANDBY MODE
         # ---------------------------------------------------------
 
-        # The dedicated ONNX WakeDetector owns wake-word detection.
-        #
-        # While in standby, ignore STT transcripts completely.
-        # The microphone remains active, but no Gemini request is made.
-
         if not self.luna_core.listening:
             return
+
+        # ---------------------------------------------------------
+        # WAKE PHRASE CONSUMPTION
+        # ---------------------------------------------------------
+
+        # The dedicated ONNX detector handles waking.
+        # If Groq later delivers the same wake phrase as a transcript,
+        # consume it instead of sending it to Gemini.
+
+        if self._just_woke:
+            self._just_woke = False
+
+            if self.is_wake_phrase(text):
+                return
 
         # ---------------------------------------------------------
         # ACTIVE MODE
@@ -139,15 +149,12 @@ class SessionSleepWakeController:
             f'[L.U.N.A.] Wake phrase detected: "{transcript}"'
         )
 
+        self._just_woke = True
+
         self.luna_core.set_listening(True)
 
         print("[L.U.N.A.] Listening state: False -> True")
         print("[L.U.N.A.] Standby mode ended.")
-
-        # Do not manually generate a reply here.
-        #
-        # The wake transcript itself is allowed to continue through
-        # the normal LiveKit turn pipeline once we return.
 
     async def shutdown(self):
         await self.standby_manager.shutdown()
