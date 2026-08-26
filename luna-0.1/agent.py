@@ -24,7 +24,10 @@ from livekit.plugins import silero
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
 from core.standby.manager import StandbyManager
-from core.identity.audio import SpeakerAudioBuffer
+from core.identity.audio import (
+    SpeakerAudioBuffer,
+    SpeakerIdentityProcessor,
+)
 from core.identity.speaker import SpeakerIdentity
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
@@ -177,12 +180,8 @@ class Assistant(Agent):
     def __init__(
         self,
         sleep_controller: SessionSleepWakeController,
-        speaker_identity: SpeakerIdentity,
-        speaker_buffer: SpeakerAudioBuffer,
     ) -> None:
         self.sleep_controller = sleep_controller
-        self.speaker_identity = speaker_identity
-        self.speaker_buffer = speaker_buffer
 
         super().__init__(
             instructions=AGENT_INSTRUCTION,
@@ -201,6 +200,7 @@ class Assistant(Agent):
         turn_ctx,
         new_message,
     ) -> None:
+
         transcript = getattr(
             new_message,
             "text_content",
@@ -222,103 +222,7 @@ class Assistant(Agent):
         ).strip()
 
         if not transcript:
-            self.speaker_buffer.clear()
             raise StopResponse()
-
-        # ---------------------------------------------------------
-        # SPEAKER IDENTIFICATION
-        # ---------------------------------------------------------
-        print(
-            "[L.U.N.A.] Speaker buffer: "
-            f"{self.speaker_buffer.debug_state()}"
-        )
-
-        pcm_data, sample_rate, num_channels = (
-            self.speaker_buffer.get_audio(
-                max_seconds=5.0
-            )
-        )
-
-        speaker_match = await (
-            self.speaker_identity.identify_pcm(
-                pcm_data=pcm_data,
-                sample_rate=sample_rate or 16000,
-                num_channels=num_channels or 1,
-            )
-        )
-
-        self.speaker_buffer.clear()
-
-        print(
-            "[L.U.N.A.] Speaker identity: "
-            f"{speaker_match.name or 'unknown'} "
-            f"({speaker_match.confidence:.2f}) "
-            f"authorized={speaker_match.authorized}"
-        )
-
-        standby_manager = (
-            self.sleep_controller.standby_manager
-        )
-
-        # ---------------------------------------------------------
-        # STANDBY / WAKE AUTHORIZATION
-        # ---------------------------------------------------------
-
-        awaiting_wake = getattr(
-            standby_manager,
-            "awaiting_speaker_authorization",
-            False,
-        )
-
-        if awaiting_wake:
-            if not speaker_match.authorized:
-                print(
-                    "[L.U.N.A.] Wake authorization rejected."
-                )
-
-                reject_wake = getattr(
-                    standby_manager,
-                    "reject_wake",
-                    None,
-                )
-
-                if reject_wake is not None:
-                    await reject_wake()
-
-                raise StopResponse()
-
-            print(
-                "[L.U.N.A.] Wake authorization accepted: "
-                f"{speaker_match.name}"
-            )
-
-            complete_wake = getattr(
-                standby_manager,
-                "complete_wake_authorization",
-                None,
-            )
-
-            if complete_wake is not None:
-                complete_wake()
-
-            # The authorized speaker has now passed identity
-            # authorization. Continue processing the wake turn.
-
-        # ---------------------------------------------------------
-        # ACTIVE USER AUTHORIZATION
-        # ---------------------------------------------------------
-
-        if not speaker_match.authorized:
-            print(
-                "[L.U.N.A.] Ignoring unauthorized "
-                "speaker."
-            )
-
-            raise StopResponse()
-
-        # ---------------------------------------------------------
-        # NORMAL L.U.N.A. CONTROL
-        # ---------------------------------------------------------
 
         await self.sleep_controller.handle_transcript(
             transcript
@@ -326,6 +230,7 @@ class Assistant(Agent):
 
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
+
 
     async def tts_node(
         self,
@@ -394,6 +299,10 @@ async def my_agent(
                 false_interruption_timeout=2.0,
                 backchannel_boundary=(0.2, 0.8),
             ),
+
+            preemptive_generation={
+                "enabled": False,
+            },
         ),
 
         llm=google.LLM(
@@ -419,19 +328,23 @@ async def my_agent(
         speaker_identity = SpeakerIdentity()
 
         speaker_buffer = SpeakerAudioBuffer(
-            max_seconds=8.0
+            max_seconds=8.0,
         )
 
-        speaker_processor = SpeakerIdentity(
+        ai_coustics_processor = (
+            ai_coustics.audio_enhancement()
+        )
+
+        speaker_processor = SpeakerIdentityProcessor(
             buffer=speaker_buffer,
+            speaker_identity=speaker_identity,
+            downstream=ai_coustics_processor,
         )
 
         await session.start(
             room=ctx.room,
             agent=Assistant(
                 sleep_controller=sleep_controller,
-                speaker_identity=speaker_identity,
-                speaker_buffer=speaker_buffer,
             ),
             room_options=room_io.RoomOptions(
                 audio_input=room_io.AudioInputOptions(
