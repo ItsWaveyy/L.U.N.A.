@@ -228,6 +228,10 @@ class Assistant(Agent):
         # ---------------------------------------------------------
         # SPEAKER IDENTIFICATION
         # ---------------------------------------------------------
+        print(
+            "[L.U.N.A.] Speaker buffer: "
+            f"{self.speaker_buffer.debug_state()}"
+        )
 
         pcm_data, sample_rate, num_channels = (
             self.speaker_buffer.get_audio(
@@ -418,6 +422,10 @@ async def my_agent(
             max_seconds=8.0
         )
 
+        speaker_processor = SpeakerIdentity(
+            buffer=speaker_buffer,
+        )
+
         await session.start(
             room=ctx.room,
             agent=Assistant(
@@ -426,15 +434,9 @@ async def my_agent(
                 speaker_buffer=speaker_buffer,
             ),
             room_options=room_io.RoomOptions(
-                audio_input = room_io.AudioInputOptions(
-                sample_rate=24000,
-                num_channels=1,
-                frame_size_ms=50,
-                noise_cancellation=speaker_buffer,
-                auto_gain_control=True,
-                pre_connect_audio=True,
-                pre_connect_audio_timeout=3.0,
-            )
+                audio_input=room_io.AudioInputOptions(
+                    noise_cancellation=speaker_processor,
+                ),
             ),
         )
 

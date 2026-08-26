@@ -1,74 +1,33 @@
-from __future__ import annotations
-
 from collections import deque
 
 import numpy as np
 from livekit import rtc
 
 
-class SpeakerAudioBuffer(rtc.FrameProcessor[rtc.AudioFrame]):
+class SpeakerAudioBuffer:
     """
-    LiveKit audio frame processor used for speaker identification.
+    Stores a short rolling window of microphone audio.
 
-    Every frame continues through the normal LiveKit audio pipeline
-    while a temporary copy is retained for speaker identification.
-
-    Only speech-bearing frames are retained. Obvious silence is
-    discarded before the embedding model sees the audio.
+    This buffer is intentionally separate from the LiveKit audio
+    pipeline. The FrameProcessor below copies frames into it while
+    returning the original frame unchanged so STT/VAD continue normally.
     """
 
     def __init__(
         self,
         max_seconds: float = 8.0,
-        min_rms: float = 0.008,
     ):
-        super().__init__()
-
         self.max_seconds = max_seconds
-        self.min_rms = min_rms
 
         self._frames = deque()
 
         self.sample_rate: int | None = None
         self.num_channels: int | None = None
 
-    # ---------------------------------------------------------
-    # AUDIO ANALYSIS
-    # ---------------------------------------------------------
-
-    @staticmethod
-    def _calculate_rms(
-        pcm_data: bytes,
-    ) -> float:
-        if not pcm_data:
-            return 0.0
-
-        samples = np.frombuffer(
-            pcm_data,
-            dtype=np.int16,
-        ).astype(np.float32)
-
-        if samples.size == 0:
-            return 0.0
-
-        samples /= 32768.0
-
-        return float(
-            np.sqrt(
-                np.mean(
-                    samples * samples
-                )
-            )
-        )
-
-    # ---------------------------------------------------------
-    # FRAME PROCESSING
-    # ---------------------------------------------------------
-
-    async def process_frame(
+    def push(
         self,
         frame: rtc.AudioFrame,
-    ) -> rtc.AudioFrame:
+    ) -> None:
         sample_rate = frame.sample_rate
         num_channels = frame.num_channels
 
@@ -86,48 +45,32 @@ class SpeakerAudioBuffer(rtc.FrameProcessor[rtc.AudioFrame]):
 
         data = bytes(frame.data)
 
-        if data:
-            duration = (
-                frame.samples_per_channel
-                / sample_rate
+        duration = (
+            frame.samples_per_channel
+            / sample_rate
+        )
+
+        self._frames.append(
+            (
+                data,
+                duration,
+            )
+        )
+
+        total_duration = sum(
+            duration
+            for _, duration in self._frames
+        )
+
+        while (
+            self._frames
+            and total_duration > self.max_seconds
+        ):
+            _, removed_duration = (
+                self._frames.popleft()
             )
 
-            rms = self._calculate_rms(data)
-
-            # Keep only frames containing meaningful audio.
-            if rms >= self.min_rms:
-                self._frames.append(
-                    (
-                        data,
-                        duration,
-                    )
-                )
-
-                total_duration = sum(
-                    item[1]
-                    for item in self._frames
-                )
-
-                while (
-                    self._frames
-                    and total_duration > self.max_seconds
-                ):
-                    _, removed_duration = (
-                        self._frames.popleft()
-                    )
-
-                    total_duration -= (
-                        removed_duration
-                    )
-
-        # IMPORTANT:
-        # Return the original frame so LiveKit continues
-        # processing it normally.
-        return frame
-
-    # ---------------------------------------------------------
-    # EXTRACTION
-    # ---------------------------------------------------------
+            total_duration -= removed_duration
 
     def get_audio(
         self,
@@ -175,23 +118,101 @@ class SpeakerAudioBuffer(rtc.FrameProcessor[rtc.AudioFrame]):
             self.num_channels,
         )
 
-    # ---------------------------------------------------------
-    # STATE
-    # ---------------------------------------------------------
+    def stats(self) -> dict:
+        """
+        Return useful debugging information about the buffer.
+        """
 
-    @property
-    def duration(self) -> float:
-        return sum(
-            duration
-            for _, duration in self._frames
+        if not self._frames:
+            return {
+                "frames": 0,
+                "buffered_bytes": 0,
+                "duration": 0.0,
+                "peak_rms": 0.0,
+            }
+
+        pcm = b"".join(
+            data
+            for data, _ in self._frames
         )
 
-    @property
-    def has_audio(self) -> bool:
-        return bool(self._frames)
+        duration = sum(
+            frame_duration
+            for _, frame_duration in self._frames
+        )
+
+        try:
+            samples = np.frombuffer(
+                pcm,
+                dtype=np.int16,
+            ).astype(np.float32)
+
+            if samples.size:
+                rms = float(
+                    np.sqrt(
+                        np.mean(
+                            np.square(samples)
+                        )
+                    )
+                )
+
+                peak_rms = rms / 32768.0
+            else:
+                peak_rms = 0.0
+
+        except Exception:
+            peak_rms = 0.0
+
+        return {
+            "frames": len(self._frames),
+            "buffered_bytes": len(pcm),
+            "duration": duration,
+            "peak_rms": peak_rms,
+        }
 
     def clear(self) -> None:
         self._frames.clear()
 
         self.sample_rate = None
         self.num_channels = None
+
+
+class SpeakerIdentityProcessor(
+    rtc.FrameProcessor[rtc.AudioFrame]
+):
+    """
+    LiveKit audio FrameProcessor that copies microphone frames
+    into SpeakerAudioBuffer while returning the original frame.
+
+    This is inserted directly into RoomIO's audio pipeline.
+    """
+
+    def __init__(
+        self,
+        buffer: SpeakerAudioBuffer,
+    ):
+        self.buffer = buffer
+        self._enabled = True
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    @enabled.setter
+    def enabled(
+        self,
+        value: bool,
+    ) -> None:
+        self._enabled = bool(value)
+
+    def _process(
+        self,
+        frame: rtc.AudioFrame,
+    ) -> rtc.AudioFrame:
+        if self.enabled:
+            self.buffer.push(frame)
+
+        return frame
+
+    def _close(self) -> None:
+        pass
