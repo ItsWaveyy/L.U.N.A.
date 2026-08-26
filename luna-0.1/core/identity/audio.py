@@ -472,40 +472,62 @@ class SpeakerIdentityProcessor(
         frame: rtc.AudioFrame,
     ) -> rtc.AudioFrame:
 
-        if not self.enabled:
-            return self.downstream._process(
-                frame
-            )
-
-        now = time.monotonic()
-
-        rms = self._rms(frame)
-
-        is_speech_like = (
-            rms >= self.SPEECH_RMS_THRESHOLD
+        print(
+            "[L.U.N.A.] GATE FRAME:",
+            frame.sample_rate,
+            frame.num_channels,
+            frame.samples_per_channel,
         )
 
-        # -----------------------------------------------------
+        if not self.enabled:
+            return self.downstream._process(frame)
+
+        # ---------------------------------------------------------
         # AUTHORIZED
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
 
         if self._state == "authorized":
-            self._last_audio_time = now
 
-            return self.downstream._process(
-                frame
-            )
+            if is_speech_like:
+                self._last_audio_time = now
 
-        # -----------------------------------------------------
+            # If we still have buffered pre-auth audio,
+            # release it BEFORE continuing with live audio.
+            if self.buffer.duration() > 0:
+                released = self._release_buffer(frame)
+
+                return self.downstream._process(
+                    released
+                )
+
+            # If the speaker stops talking, lock again.
+            if (
+                self._last_audio_time
+                and (
+                    now - self._last_audio_time
+                    > self.RESET_SILENCE_SECONDS
+                )
+            ):
+                print(
+                    "[L.U.N.A.] Speaker gate: "
+                    "speech ended — locking."
+                )
+
+                self.reset()
+
+                return self._silence_like(frame)
+
+            # Authorized live audio passes normally.
+            return self.downstream._process(frame)
+
+        # ---------------------------------------------------------
         # LOCKED / CHECKING
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
 
         if is_speech_like:
             self._last_audio_time = now
 
-            if (
-                self._speech_started_at is None
-            ):
+            if self._speech_started_at is None:
                 self._speech_started_at = now
 
                 print(
@@ -513,12 +535,12 @@ class SpeakerIdentityProcessor(
                     "speech detected — buffering."
                 )
 
-        # Always capture raw audio while locked/checking.
+        # EVERYTHING BEFORE AUTHORIZATION STAYS HERE.
         self.buffer.push(frame)
 
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
         # IDENTITY CHECK
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
 
         if (
             self._state == "locked"
@@ -528,20 +550,9 @@ class SpeakerIdentityProcessor(
         ):
             self._start_identity_check()
 
-                # -----------------------------------------------------
-        # AUTHORIZATION COMPLETED
-        # -----------------------------------------------------
-
-        if self._state == "authorized":
-            released = self._release_buffer(frame)
-
-            return self.downstream._process(
-                released
-            )
-
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
         # UNAUTHORIZED / CHECKING
-        # -----------------------------------------------------
+        # ---------------------------------------------------------
 
         if (
             self._last_audio_time
@@ -552,12 +563,9 @@ class SpeakerIdentityProcessor(
         ):
             self.reset()
 
-        # NOTHING GETS THROUGH THE GATE.
+        # HARD GATE:
+        # NOTHING REACHES AI-COUSTICS UNTIL AUTHORIZED.
         return self._silence_like(frame)
-
-    # ---------------------------------------------------------
-    # CLOSE
-    # ---------------------------------------------------------
 
     def _close(self) -> None:
         if (

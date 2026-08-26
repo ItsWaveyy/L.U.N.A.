@@ -28,7 +28,9 @@
 
 Kokoro activatation:
 
-    python -m uvicorn services.kokoro.server:app --host 127.0.0.1 --port 8880
+    source ../kokoro-venv/bin/activate
+
+    ../kokoro-venv/bin/python -m uvicorn services.kokoro.server:app --host 127.0.0.1 --port 8880
 
 Add User:
 
