@@ -15,7 +15,7 @@
 
 5. Activate:
 
-    source venv/bin/activate
+    source luna-0.1/venv/bin/activate
 
 6. Upgrade the basic packaging tools:
 
@@ -28,9 +28,13 @@
 
 Kokoro activatation:
 
-    source ../kokoro-venv/bin/activate
+    source kokoro-venv/bin/activate
+
+    cd luna-0.1
 
     ../kokoro-venv/bin/python -m uvicorn services.kokoro.server:app --host 127.0.0.1 --port 8880
+
+    lsof -nP -iTCP:8880 -sTCP:LISTEN
 
 Add User:
 

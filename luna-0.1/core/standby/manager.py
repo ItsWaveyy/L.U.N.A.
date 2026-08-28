@@ -281,7 +281,13 @@ class StandbyManager:
 
             self.begin_wake_authorization()
 
-            await self.wake()
+            authorized = await self._authorize_wake()
+
+            if authorized:
+                self.complete_wake_authorization()
+                await self.wake()
+            else:
+                await self.reject_wake()
 
         except asyncio.CancelledError:
             raise

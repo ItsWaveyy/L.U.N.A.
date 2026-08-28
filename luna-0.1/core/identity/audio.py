@@ -286,13 +286,15 @@ class SpeakerIdentityProcessor(
     ) -> rtc.AudioFrame:
         return rtc.AudioFrame(
             data=bytes(
-                len(frame.data)
+                frame.num_channels
+                * frame.samples_per_channel
+                * 2
             ),
             sample_rate=frame.sample_rate,
             num_channels=frame.num_channels,
             samples_per_channel=frame.samples_per_channel,
         )
-
+    
     # ---------------------------------------------------------
     # RELEASE BUFFER
     # ---------------------------------------------------------
@@ -471,6 +473,12 @@ class SpeakerIdentityProcessor(
         self,
         frame: rtc.AudioFrame,
     ) -> rtc.AudioFrame:
+
+        now = time.monotonic()
+        rms = self._rms(frame)
+        is_speech_like = (
+            rms >= self.SPEECH_RMS_THRESHOLD
+        )
 
         print(
             "[L.U.N.A.] GATE FRAME:",
