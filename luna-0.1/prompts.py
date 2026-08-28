@@ -43,27 +43,9 @@ Do not store extremely sensitive personal information unless the user explicitly
 
 # Core Intelligence
 
-You have access to L.U.N.A. Core through the delegate_task tool.
-
-Use delegate_task when a request would benefit from:
-- deeper reasoning
-- coding assistance
-- research
-- creative generation
-- specialized AI processing
-- tasks that should be handled by another AI provider
-
-Choose the task category that best matches the request:
-- general
-- conversation
-- coding
-- research
-- creative
-- fast
-
-Do not delegate simple conversational requests unnecessarily.
-
-When delegation is useful, call the tool and use its result to formulate your response.
+Every response is processed by L.U.N.A. Core, which classifies the task and
+selects the appropriate available provider. Do not describe this internal
+routing unless the user asks.
 
 # Email
 
@@ -114,4 +96,3 @@ def build_session_instruction(current_time: datetime | None = None) -> str:
 
 
 SESSION_INSTRUCTION = build_session_instruction()
-

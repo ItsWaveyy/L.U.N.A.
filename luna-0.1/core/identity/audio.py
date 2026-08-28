@@ -356,7 +356,7 @@ class SpeakerIdentityProcessor(
             return
 
         pcm_data, sample_rate, num_channels = (
-            self.buffer.get_audio()
+            self.buffer.get_audio(max_seconds=self.REQUIRED_AUDIO_SECONDS)
         )
 
         if not pcm_data:
@@ -496,17 +496,25 @@ class SpeakerIdentityProcessor(
 
         if self._state == "authorized":
 
-            if is_speech_like:
-                self._last_audio_time = now
-
-            # If we still have buffered pre-auth audio,
-            # release it BEFORE continuing with live audio.
+            # Identity checking intentionally holds the opening speech frames.
+            # Release them once, together with this first authorized frame, so
+            # downstream VAD/STT receives the complete utterance rather than a
+            # clipped tail.
             if self.buffer.duration() > 0:
                 released = self._release_buffer(frame)
 
-                return self.downstream._process(
-                    released
-                )
+                return self.downstream._process(released)
+
+            if is_speech_like:
+                self._last_audio_time = now
+
+                if self._speech_started_at is None:
+                    self._speech_started_at = now
+
+                    print(
+                        "[L.U.N.A.] Speaker gate: "
+                        "speech detected — buffering."
+                    )
 
             # If the speaker stops talking, lock again.
             if (

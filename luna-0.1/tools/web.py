@@ -1,7 +1,23 @@
+import asyncio
 import logging
 
 from livekit.agents import function_tool, RunContext
 from langchain_community.tools import DuckDuckGoSearchRun
+
+
+async def search_web_query(query: str) -> str:
+    """Core-facing web search operation, independent of LiveKit."""
+
+    try:
+        results = await asyncio.to_thread(
+            DuckDuckGoSearchRun().run,
+            query,
+        )
+        logging.info("Web search completed for: %s", query)
+        return results
+    except Exception as exc:
+        logging.error("Web search error: %s", exc)
+        return "I couldn't complete the web search."
 
 
 @function_tool()
@@ -13,20 +29,4 @@ async def search_web(
     Search the internet for information.
     """
 
-    try:
-        search = DuckDuckGoSearchRun()
-
-        results = search.run(query)
-
-        logging.info(
-            f"Web search completed for: {query}"
-        )
-
-        return results
-
-    except Exception as e:
-        logging.error(
-            f"Web search error: {e}"
-        )
-
-        return "I couldn't complete the web search."
+    return await search_web_query(query)

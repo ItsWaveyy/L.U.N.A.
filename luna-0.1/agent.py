@@ -12,14 +12,12 @@ from livekit.agents import (
     AgentSession,
     Agent,
     room_io,
-    function_tool,
-    RunContext,
     TurnHandlingOptions,
     EndpointingOptions,
     InterruptionOptions,
 )
 from livekit.agents.llm import StopResponse
-from livekit.plugins import ai_coustics, google, groq
+from livekit.plugins import ai_coustics, groq
 from livekit.plugins import silero
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
@@ -31,69 +29,11 @@ from core.identity.audio import (
 from core.identity.speaker import SpeakerIdentity
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
-from tools.memory import initialize_database, remember, recall
+from tools.memory import initialize_database
 
 
 KOKORO_URL = "http://127.0.0.1:8880"
 KOKORO_VOICE = "af_heart"
-
-
-@function_tool()
-async def get_weather(
-    context: RunContext,
-    city: str,
-) -> str:
-    from tools.weather import get_weather as _get_weather
-
-    return await _get_weather(
-        context,
-        city,
-    )
-
-
-@function_tool()
-async def get_weather_forecast(
-    context: RunContext,
-    city: str,
-    days: int = 3,
-) -> str:
-    from tools.weather import get_weather as _get_weather
-
-    return await _get_weather(
-        context,
-        city,
-        days=days,
-    )
-
-
-@function_tool()
-async def send_email(
-    context: RunContext,
-    recipient: str,
-    subject: str,
-    body: str,
-) -> str:
-    from tools.email import send_email as _send_email
-
-    return await _send_email(
-        context,
-        recipient,
-        subject,
-        body,
-    )
-
-
-@function_tool()
-async def delegate_task(
-    prompt: str,
-    task: str = "general",
-) -> str:
-    from tools.delegate import delegate_task as _delegate_task
-
-    return await _delegate_task(
-        prompt=prompt,
-        task=task,
-    )
 
 
 load_dotenv()
@@ -180,20 +120,88 @@ class Assistant(Agent):
     def __init__(
         self,
         sleep_controller: SessionSleepWakeController,
+        luna_core: LunaCore,
     ) -> None:
         self.sleep_controller = sleep_controller
+        self.luna_core = luna_core
+        self.last_core_response = None
 
         super().__init__(
             instructions=AGENT_INSTRUCTION,
-            tools=[
-                get_weather,
-                get_weather_forecast,
-                send_email,
-                remember,
-                recall,
-                delegate_task,
-            ],
         )
+
+    @staticmethod
+    def _latest_user_message(chat_ctx) -> str:
+        """Return the newest text message spoken by the user."""
+
+        for message in reversed(chat_ctx.messages()):
+            if message.role != "user":
+                continue
+
+            text = (message.text_content or "").strip()
+
+            if text:
+                return text
+
+        return ""
+
+    @staticmethod
+    def _conversation_context(chat_ctx) -> str:
+        """Render recent text turns for providers that accept a flat prompt."""
+
+        turns = []
+
+        for message in chat_ctx.messages()[-8:]:
+            if message.role not in {"user", "assistant"}:
+                continue
+
+            text = (message.text_content or "").strip()
+
+            if text:
+                turns.append(f"{message.role.title()}: {text}")
+
+        return "\n".join(turns)
+
+    async def llm_node(
+        self,
+        chat_ctx,
+        tools,
+        model_settings,
+    ) -> str:
+        """Generate every normal live reply through the Core router.
+
+        LiveKit owns the realtime turn lifecycle, while LunaCore owns task
+        classification, provider selection, offline policy, and fallback.
+        """
+
+        prompt = self._latest_user_message(chat_ctx)
+
+        if not prompt:
+            return ""
+
+        conversation = self._conversation_context(chat_ctx)
+        system_prompt = AGENT_INSTRUCTION
+
+        if conversation:
+            system_prompt += (
+                "\n\nRecent conversation for continuity:\n"
+                f"{conversation}"
+            )
+
+        response = await self.luna_core.ask(
+            prompt=prompt,
+            system_prompt=system_prompt,
+        )
+
+        self.last_core_response = response
+
+        print(
+            "[L.U.N.A.] Core response: "
+            f"provider={response.provider} model={response.model} "
+            f"task={response.metadata.get('classified_task')}"
+        )
+
+        return response.text
 
     async def on_user_turn_completed(
         self,
@@ -237,7 +245,7 @@ class Assistant(Agent):
         text: AsyncIterable[str],
         model_settings,
     ) -> AsyncIterable[rtc.AudioFrame]:
-        """Convert Gemini text into L.U.N.A.'s Kokoro voice."""
+        """Convert Core-generated text into L.U.N.A.'s Kokoro voice."""
 
         text_parts = []
 
@@ -305,9 +313,6 @@ async def my_agent(
             },
         ),
 
-        llm=google.LLM(
-            model="gemini-3.1-flash-lite",
-        ),
     )
 
     luna_core = LunaCore()
@@ -345,6 +350,7 @@ async def my_agent(
             room=ctx.room,
             agent=Assistant(
                 sleep_controller=sleep_controller,
+                luna_core=luna_core,
             ),
             room_options=room_io.RoomOptions(
                 audio_input=room_io.AudioInputOptions(

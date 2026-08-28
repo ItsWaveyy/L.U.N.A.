@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import requests
 
@@ -230,6 +231,35 @@ def _format_forecast(
     return "\n".join(lines)
 
 
+async def get_weather_for_city(
+    city: str,
+    days: int = 1,
+) -> str:
+    """Core-facing weather operation, independent of LiveKit."""
+
+    try:
+        days = max(1, min(int(days), 10))
+        latitude, longitude, display_name = await asyncio.to_thread(
+            _geocode_city,
+            city,
+        )
+        payload = await asyncio.to_thread(
+            _get_forecast,
+            latitude,
+            longitude,
+            days,
+        )
+
+        if days == 1:
+            return _format_current_weather(payload, display_name)
+
+        return _format_forecast(payload, display_name, days)
+
+    except Exception as exc:
+        logging.error("[L.U.N.A.] Weather error: %s", exc)
+        return f"I couldn't retrieve the weather for {city}."
+
+
 @function_tool()
 async def get_weather(
     context: RunContext,
@@ -244,38 +274,4 @@ async def get_weather(
         days: Number of days to retrieve. Use 1 for current conditions.
     """
 
-    try:
-        days = max(1, min(int(days), 10))
-
-        latitude, longitude, display_name = _geocode_city(
-            city
-        )
-
-        payload = _get_forecast(
-            latitude,
-            longitude,
-            days,
-        )
-
-        if days == 1:
-            return _format_current_weather(
-                payload,
-                display_name,
-            )
-
-        return _format_forecast(
-            payload,
-            display_name,
-            days,
-        )
-
-    except Exception as exc:
-        logging.error(
-            "[L.U.N.A.] Weather error: %s",
-            exc,
-        )
-
-        return (
-            f"I couldn't retrieve the weather "
-            f"for {city}."
-        )
+    return await get_weather_for_city(city, days)

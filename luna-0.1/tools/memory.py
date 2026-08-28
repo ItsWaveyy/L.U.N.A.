@@ -24,6 +24,54 @@ def initialize_database():
     connection.close()
 
 
+async def store_memory(memory: str) -> str:
+    """Store memory without depending on LiveKit's tool context."""
+
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DATABASE_PATH)
+
+    try:
+        connection.execute(
+            "INSERT INTO memories (memory) VALUES (?)",
+            (memory,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    return f"I'll remember that: {memory}"
+
+
+async def recall_memories(query: str) -> str:
+    """Search memory without depending on LiveKit's tool context."""
+
+    DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(DATABASE_PATH)
+
+    try:
+        results = connection.execute(
+            """
+            SELECT memory
+            FROM memories
+            WHERE memory LIKE ?
+            ORDER BY created_at DESC
+            LIMIT 5
+            """,
+            (f"%{query}%",),
+        ).fetchall()
+    finally:
+        connection.close()
+
+    if not results:
+        return "I don't have anything stored about that."
+
+    memories = "\n".join(
+        f"- {row[0]}"
+        for row in results
+    )
+    return f"Here's what I remember:\n{memories}"
+
+
 @function_tool()
 async def remember(
     context: RunContext,
@@ -34,19 +82,7 @@ async def remember(
     """
 
     try:
-        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(DATABASE_PATH)
-        cursor = connection.cursor()
-
-        cursor.execute(
-            "INSERT INTO memories (memory) VALUES (?)",
-            (memory,),
-        )
-
-        connection.commit()
-        connection.close()
-
-        return f"I'll remember that: {memory}"
+        return await store_memory(memory)
 
     except Exception as e:
         return f"I couldn't save that memory: {e}"
@@ -62,34 +98,7 @@ async def recall(
     """
 
     try:
-        DATABASE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(DATABASE_PATH)
-        cursor = connection.cursor()
-
-        cursor.execute(
-            """
-            SELECT memory
-            FROM memories
-            WHERE memory LIKE ?
-            ORDER BY created_at DESC
-            LIMIT 5
-            """,
-            (f"%{query}%",),
-        )
-
-        results = cursor.fetchall()
-
-        connection.close()
-
-        if not results:
-            return "I don't have anything stored about that."
-
-        memories = "\n".join(
-            f"- {row[0]}"
-            for row in results
-        )
-
-        return f"Here's what I remember:\n{memories}"
+        return await recall_memories(query)
 
     except Exception as e:
         return f"I couldn't access my memory: {e}"

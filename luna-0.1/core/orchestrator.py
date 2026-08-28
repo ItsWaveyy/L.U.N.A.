@@ -5,6 +5,7 @@ from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
 from core.classifier import TaskClassifier
 from core.standby.manager import StandbyManager
+from core.tooling import ToolRegistry, build_default_tool_registry, parse_tool_calls
 
 
 CORE_SYSTEM_PROMPT = """
@@ -198,13 +199,18 @@ class LunaCore:
         "hey, luna",
     )
 
-    def __init__(self, providers: list[AIProvider] | None = None):
+    def __init__(
+        self,
+        providers: list[AIProvider] | None = None,
+        tools: ToolRegistry | None = None,
+    ):
         if providers is None:
             from core.brain_registry import load_providers
             providers = load_providers()
 
         self.router = AIRouter(providers)
         self.classifier = TaskClassifier()
+        self.tools = tools or build_default_tool_registry()
         self.listening = True
         self._warmup_task = None
 
@@ -363,6 +369,16 @@ class LunaCore:
                 f"{system_prompt}"
             )
 
+        combined_system_prompt += (
+            "\n\nAvailable Core tools:\n"
+            f"{self.tools.definitions()}\n\n"
+            "When a tool is necessary, reply with only valid JSON in this "
+            "exact shape: {\"tool_calls\":[{\"name\":\"tool_name\","
+            "\"arguments\":{...}}]}. Do not use a tool for ordinary "
+            "conversation. Only use send_email after the user explicitly asks "
+            "to send it, and include explicit_request=true."
+        )
+
         request = AIRequest(
             prompt=prompt,
             task=task,
@@ -376,9 +392,46 @@ class LunaCore:
             },
         )
 
-        response = await self.router.generate(
-            request
-        )
+        response = await self.router.generate(request)
+
+        tool_calls = parse_tool_calls(response.text)
+
+        if tool_calls:
+            tool_results = []
+
+            for name, arguments in tool_calls:
+                result = await self.tools.execute(
+                    name,
+                    arguments,
+                    offline=self.router.mode == "offline",
+                )
+                tool_results.append({
+                    "name": name,
+                    "result": result,
+                })
+
+            completion_request = AIRequest(
+                prompt=(
+                    f"Original user request: {prompt}\n\n"
+                    "Tool results:\n"
+                    f"{tool_results}\n\n"
+                    "Respond to the user using these results. Do not describe "
+                    "the internal tool protocol."
+                ),
+                task=task,
+                system_prompt=(
+                    combined_system_prompt
+                    + "\n\nThe required tools have already run. Return "
+                    "the final user-facing answer, not tool-call JSON."
+                ),
+                metadata=request.metadata.copy(),
+            )
+            response = await self.router.generate(completion_request)
+            response.metadata["tools_used"] = [
+                name for name, _ in tool_calls
+            ]
+        else:
+            response.metadata["tools_used"] = []
 
         response.metadata.update({
             "classified_task": task,
