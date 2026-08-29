@@ -1,7 +1,7 @@
 import asyncio
 import io
 import wave
-from typing import AsyncIterable
+from typing import AsyncIterable, AsyncGenerator
 
 import requests
 from dotenv import load_dotenv
@@ -15,8 +15,9 @@ from livekit.agents import (
     TurnHandlingOptions,
     EndpointingOptions,
     InterruptionOptions,
+    StopResponse,
+    llm,
 )
-from livekit.agents.llm import StopResponse
 from livekit.plugins import ai_coustics, groq
 from livekit.plugins import silero
 
@@ -116,6 +117,31 @@ def wav_to_audio_frames(
         )
 
 
+class PlaceholderLLM(llm.LLM):
+    """
+    Framework-only placeholder LLM.
+
+    L.U.N.A. does NOT use this model for actual generation.
+
+    LiveKit 1.7.0 requires AgentSession to have an LLM object
+    attached before generate_reply() can be called.
+
+    Actual L.U.N.A. generation happens inside Assistant.llm_node()
+    through LunaCore.
+    """
+
+    def chat(
+        self,
+        *args,
+        **kwargs,
+    ):
+        raise RuntimeError(
+            "PlaceholderLLM.chat() was called directly. "
+            "L.U.N.A. should route generation through "
+            "Assistant.llm_node()."
+        )
+
+
 class Assistant(Agent):
     def __init__(
         self,
@@ -138,7 +164,9 @@ class Assistant(Agent):
             if message.role != "user":
                 continue
 
-            text = (message.text_content or "").strip()
+            text = (
+                message.text_content or ""
+            ).strip()
 
             if text:
                 return text
@@ -152,13 +180,20 @@ class Assistant(Agent):
         turns = []
 
         for message in chat_ctx.messages()[-8:]:
-            if message.role not in {"user", "assistant"}:
+            if message.role not in {
+                "user",
+                "assistant",
+            }:
                 continue
 
-            text = (message.text_content or "").strip()
+            text = (
+                message.text_content or ""
+            ).strip()
 
             if text:
-                turns.append(f"{message.role.title()}: {text}")
+                turns.append(
+                    f"{message.role.title()}: {text}"
+                )
 
         return "\n".join(turns)
 
@@ -167,19 +202,36 @@ class Assistant(Agent):
         chat_ctx,
         tools,
         model_settings,
-    ) -> str:
-        """Generate every normal live reply through the Core router.
+    ) -> AsyncGenerator[str, None]:
+        """
+        Route live responses through LunaCore.
 
-        LiveKit owns the realtime turn lifecycle, while LunaCore owns task
-        classification, provider selection, offline policy, and fallback.
+        LiveKit handles:
+            - realtime turn lifecycle
+            - STT
+            - VAD
+            - interruption handling
+            - conversation state
+
+        LunaCore handles:
+            - task classification
+            - provider selection
+            - online/offline policy
+            - fallback
+            - actual LLM generation
         """
 
-        prompt = self._latest_user_message(chat_ctx)
+        prompt = self._latest_user_message(
+            chat_ctx
+        )
 
         if not prompt:
-            return ""
+            return
 
-        conversation = self._conversation_context(chat_ctx)
+        conversation = self._conversation_context(
+            chat_ctx
+        )
+
         system_prompt = AGENT_INSTRUCTION
 
         if conversation:
@@ -187,6 +239,11 @@ class Assistant(Agent):
                 "\n\nRecent conversation for continuity:\n"
                 f"{conversation}"
             )
+
+        print(
+            "[L.U.N.A.] Routing request through Core: "
+            f"{prompt}"
+        )
 
         response = await self.luna_core.ask(
             prompt=prompt,
@@ -197,11 +254,13 @@ class Assistant(Agent):
 
         print(
             "[L.U.N.A.] Core response: "
-            f"provider={response.provider} model={response.model} "
+            f"provider={response.provider} "
+            f"model={response.model} "
             f"task={response.metadata.get('classified_task')}"
         )
 
-        return response.text
+        if response.text:
+            yield response.text
 
     async def on_user_turn_completed(
         self,
@@ -239,18 +298,22 @@ class Assistant(Agent):
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
 
-
     async def tts_node(
         self,
         text: AsyncIterable[str],
         model_settings,
-    ) -> AsyncIterable[rtc.AudioFrame]:
-        """Convert Core-generated text into L.U.N.A.'s Kokoro voice."""
+    ) -> AsyncGenerator[rtc.AudioFrame, None]:
+        """
+        Convert generated text into L.U.N.A.'s local Kokoro voice.
+        """
 
         text_parts = []
 
         async for chunk in text:
-            text_parts.append(chunk)
+            if chunk:
+                text_parts.append(
+                    str(chunk)
+                )
 
         full_text = "".join(
             text_parts
@@ -258,6 +321,10 @@ class Assistant(Agent):
 
         if not full_text:
             return
+
+        print(
+            f"[L.U.N.A.] Kokoro TTS: {full_text}"
+        )
 
         wav_bytes = await asyncio.to_thread(
             synthesize_kokoro,
@@ -274,12 +341,21 @@ server = AgentServer()
 
 
 @server.rtc_session(
-    agent_name="my-agent"
+    agent_name="L.U.N.A.",
 )
 async def my_agent(
     ctx: agents.JobContext,
 ):
     session = AgentSession(
+        # LiveKit requires an LLM object to exist.
+        #
+        # This placeholder exists only so LiveKit's
+        # AgentSession lifecycle can initialize.
+        #
+        # Actual generation is routed through
+        # Assistant.llm_node() -> LunaCore.
+        llm=PlaceholderLLM(),
+
         stt=groq.STT(),
 
         vad=silero.VAD.load(
@@ -312,7 +388,6 @@ async def my_agent(
                 "enabled": False,
             },
         ),
-
     )
 
     luna_core = LunaCore()
@@ -326,7 +401,6 @@ async def my_agent(
         session=session,
         luna_core=luna_core,
         standby_manager=standby_manager,
-
     )
 
     try:
@@ -361,6 +435,10 @@ async def my_agent(
 
         print(
             "[L.U.N.A.] Speaker identity processor: ONLINE"
+        )
+
+        print(
+            "[L.U.N.A.] Generating startup greeting..."
         )
 
         await session.generate_reply(

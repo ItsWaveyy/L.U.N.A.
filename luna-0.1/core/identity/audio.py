@@ -205,7 +205,7 @@ class SpeakerIdentityProcessor(
         L.U.N.A.
     """
 
-    REQUIRED_AUDIO_SECONDS = 1.25
+    REQUIRED_AUDIO_SECONDS = 2.5
 
     # RMS threshold used ONLY to determine whether meaningful
     # speech/audio has started. This is not the AgentSession VAD.
@@ -306,7 +306,7 @@ class SpeakerIdentityProcessor(
         """
         Combine the buffered pre-auth audio with the current frame.
 
-        This lets the first ~1.25 seconds of speech reach ai-coustics
+        This lets the first ~2.5 seconds of speech reach ai-coustics
         after authorization instead of being permanently lost.
         """
 
@@ -347,6 +347,33 @@ class SpeakerIdentityProcessor(
             samples_per_channel=samples_per_channel,
         )
 
+    def _save_debug_audio(self) -> None:
+        import wave
+
+        pcm_data, sample_rate, num_channels = (
+            self.buffer.get_audio(
+                max_seconds=self.REQUIRED_AUDIO_SECONDS
+            )
+        )
+
+        if not pcm_data or sample_rate is None or num_channels is None:
+            return
+
+        path = "/tmp/luna_gate_debug.wav"
+
+        with wave.open(path, "wb") as wav:
+            wav.setnchannels(num_channels)
+            wav.setsampwidth(2)
+            wav.setframerate(sample_rate)
+            wav.writeframes(pcm_data)
+
+        print(
+            "[L.U.N.A.] DEBUG AUDIO SAVED:",
+            path,
+            f"({sample_rate}Hz, {num_channels}ch, "
+            f"{len(pcm_data)} bytes)"
+        )
+
     # ---------------------------------------------------------
     # IDENTITY
     # ---------------------------------------------------------
@@ -373,6 +400,8 @@ class SpeakerIdentityProcessor(
             f"checking identity from "
             f"{self.buffer.duration():.2f}s of raw audio"
         )
+
+        self._save_debug_audio()
 
         self._state = "checking"
 
