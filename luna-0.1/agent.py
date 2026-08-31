@@ -34,94 +34,14 @@ from core.timing import (
     log_turn_timing,
     luna_log,
 )
+from core.tts.kokoro import KokoroTTS
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
 from tools.memory import initialize_database
 
 
-KOKORO_URL = "http://127.0.0.1:8880"
-KOKORO_VOICE = "af_heart"
-
-
 load_dotenv()
 initialize_database()
-
-
-def synthesize_kokoro(text: str) -> bytes:
-    """Send text to the local Kokoro service and return WAV bytes."""
-
-    response = requests.post(
-        f"{KOKORO_URL}/speak",
-        json={
-            "text": text,
-            "voice": KOKORO_VOICE,
-        },
-        timeout=60,
-    )
-
-    response.raise_for_status()
-
-    return response.content
-
-
-def wav_to_audio_frames(
-    wav_bytes: bytes,
-):
-    """Convert Kokoro WAV audio into LiveKit AudioFrames."""
-
-    with wave.open(
-        io.BytesIO(wav_bytes),
-        "rb",
-    ) as wav:
-        sample_rate = wav.getframerate()
-        num_channels = wav.getnchannels()
-        sample_width = wav.getsampwidth()
-
-        if sample_width != 2:
-            raise ValueError(
-                f"Expected 16-bit PCM, "
-                f"got {sample_width * 8}-bit audio."
-            )
-
-        pcm_data = wav.readframes(
-            wav.getnframes()
-        )
-
-    samples_per_frame = int(
-        sample_rate * 0.02
-    )
-
-    bytes_per_sample = num_channels * 2
-
-    bytes_per_frame = (
-        samples_per_frame
-        * bytes_per_sample
-    )
-
-    for start in range(
-        0,
-        len(pcm_data),
-        bytes_per_frame,
-    ):
-        chunk = pcm_data[
-            start:start + bytes_per_frame
-        ]
-
-        if not chunk:
-            continue
-
-        samples = (
-            len(chunk)
-            // bytes_per_sample
-        )
-
-        yield rtc.AudioFrame(
-            data=chunk,
-            sample_rate=sample_rate,
-            num_channels=num_channels,
-            samples_per_channel=samples,
-        )
-
 
 class PlaceholderLLM(llm.LLM):
     """
@@ -329,73 +249,6 @@ class Assistant(Agent):
         if not self.sleep_controller.luna_core.listening:
             raise StopResponse()
 
-    async def tts_node(
-        self,
-        text: AsyncIterable[str],
-        model_settings,
-    ) -> AsyncGenerator[rtc.AudioFrame, None]:
-        """
-        Convert generated text into L.U.N.A.'s local Kokoro voice.
-        """
-
-        text_parts = []
-
-        async for chunk in text:
-            if chunk:
-                text_parts.append(
-                    str(chunk)
-                )
-
-        full_text = "".join(
-            text_parts
-        ).strip()
-
-        if not full_text:
-            return
-
-        luna_log(
-            f"Kokoro TTS: {full_text}"
-        )
-
-        synthesis_started = time.perf_counter()
-
-        wav_bytes = await asyncio.to_thread(
-            synthesize_kokoro,
-            full_text,
-        )
-
-        synthesis_time = (
-            time.perf_counter()
-            - synthesis_started
-        )
-
-        audio_frames = list(
-            wav_to_audio_frames(
-                wav_bytes
-            )
-        )
-
-        audio_duration = sum(
-            frame.samples_per_channel
-            / frame.sample_rate
-            for frame in audio_frames
-        )
-
-        luna_log(
-            "Kokoro timing: "
-            f"synthesis={synthesis_time:.3f}s "
-            f"audio={audio_duration:.3f}s "
-            f"rtf={(
-                synthesis_time / audio_duration
-                if audio_duration > 0
-                else 0.0
-            ):.2f}x"
-        )
-
-        for frame in audio_frames:
-            yield frame
-
-
 server = AgentServer()
 
 
@@ -414,6 +267,7 @@ async def my_agent(
         # Actual generation is routed through
         # Assistant.llm_node() -> LunaCore.
         llm=PlaceholderLLM(),
+        tts=KokoroTTS(),
 
         stt=groq.STT(),
 

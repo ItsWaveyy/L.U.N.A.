@@ -5,5 +5,3 @@ __pycache__/
 data/
 outputs.txt
 output/
-data/speakers/profiles.json
-data/speakers/enrollment/
