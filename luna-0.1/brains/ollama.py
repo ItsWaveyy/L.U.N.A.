@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from config import OLLAMA_BASE_URL
@@ -56,6 +58,8 @@ Do not claim to have internet access.
             "content": request.prompt,
         })
 
+        chunks: list[str] = []
+
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(
                 connect=3.0,
@@ -64,25 +68,47 @@ Do not claim to have internet access.
                 pool=5.0,
             )
         ) as client:
-            response = await client.post(
+
+            async with client.stream(
+                "POST",
                 f"{self.base_url}/api/chat",
                 json={
                     "model": self.model,
                     "messages": messages,
                     "stream": False,
+                    "think": False,
+                    "keep_alive": "30m",
+                    "options": {
+                        "temperature": 0.7,
+                        "num_predict": 120,
+                    },
                 },
-            )
+            ) as response:
 
-        response.raise_for_status()
+                response.raise_for_status()
 
-        data = response.json()
+                async for line in response.aiter_lines():
+                    if not line:
+                        continue
+
+                    data = json.loads(line)
+
+                    message = data.get("message", {})
+                    content = message.get("content", "")
+
+                    if content:
+                        chunks.append(content)
+
+                    if data.get("done"):
+                        break
 
         return AIResponse(
-            text=data["message"]["content"],
+            text="".join(chunks),
             provider=self.name,
             model=self.model,
             metadata={
                 "offline_capable": True,
+                "streamed": True,
             },
         )
 

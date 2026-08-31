@@ -6,12 +6,18 @@ import numpy as np
 from livekit import rtc
 
 from core.identity.speaker import SpeakerIdentity, SpeakerMatch
+from core.timing import luna_log
 
 
 class SpeakerAudioBuffer:
     """
-    Rolling raw microphone buffer used exclusively by the
-    speaker-identity gate.
+    Rolling raw microphone buffer used by the asynchronous
+    speaker-identity system.
+
+    This buffer is NOT an authorization gate.
+
+    It exists only to provide enough recent speech for speaker
+    identification without interrupting the normal audio pipeline.
     """
 
     def __init__(
@@ -179,41 +185,46 @@ class SpeakerIdentityProcessor(
     rtc.FrameProcessor[rtc.AudioFrame]
 ):
     """
-    HARD SPEAKER GATE.
+    ASYNCHRONOUS SPEAKER IDENTITY PROCESSOR.
 
-    Raw microphone audio enters here first.
+    Speaker identity is treated as an informational signal rather
+    than a hard audio authorization gate.
 
-    Unauthorized audio NEVER reaches the downstream processor.
-
-    Authorized audio is released only after speaker identity
-    has passed authorization.
-
-    Pipeline:
+    Active-mode pipeline:
 
         microphone
             ↓
         SpeakerIdentityProcessor
-            ↓
-        authorization
-            ↓
-        ai-coustics
-            ↓
-        Silero VAD
-            ↓
-        Groq STT
-            ↓
-        L.U.N.A.
+            ├──→ background speaker identification
+            │
+            └──→ downstream audio immediately
+                    ↓
+                ai-coustics
+                    ↓
+                Silero VAD
+                    ↓
+                STT
+                    ↓
+                L.U.N.A.
+
+    IMPORTANT:
+
+    This processor NEVER blocks active-mode audio while waiting for
+    speaker identification.
+
+    Speaker authorization remains the responsibility of the
+    standby/wake system.
     """
 
     REQUIRED_AUDIO_SECONDS = 2.5
 
-    # RMS threshold used ONLY to determine whether meaningful
-    # speech/audio has started. This is not the AgentSession VAD.
     SPEECH_RMS_THRESHOLD = 0.008
 
-    # How long silence must persist before a denied/unfinished
-    # attempt is considered a new attempt.
     RESET_SILENCE_SECONDS = 0.9
+
+    # Minimum amount of fresh speech that must accumulate before
+    # another identity check is allowed.
+    IDENTITY_RECHECK_SECONDS = 2.5
 
     def __init__(
         self,
@@ -227,12 +238,12 @@ class SpeakerIdentityProcessor(
 
         self._enabled = True
 
-        self._state = "locked"
-
         self._identity_task: asyncio.Task | None = None
 
         self._last_audio_time = 0.0
         self._speech_started_at: float | None = None
+
+        self._last_identity_check_at = 0.0
 
         self.last_match: SpeakerMatch | None = None
 
@@ -277,75 +288,8 @@ class SpeakerIdentityProcessor(
             return 0.0
 
     # ---------------------------------------------------------
-    # SILENCE FRAME
+    # DEBUG AUDIO
     # ---------------------------------------------------------
-
-    @staticmethod
-    def _silence_like(
-        frame: rtc.AudioFrame,
-    ) -> rtc.AudioFrame:
-        return rtc.AudioFrame(
-            data=bytes(
-                frame.num_channels
-                * frame.samples_per_channel
-                * 2
-            ),
-            sample_rate=frame.sample_rate,
-            num_channels=frame.num_channels,
-            samples_per_channel=frame.samples_per_channel,
-        )
-    
-    # ---------------------------------------------------------
-    # RELEASE BUFFER
-    # ---------------------------------------------------------
-
-    def _release_buffer(
-        self,
-        current_frame: rtc.AudioFrame,
-    ) -> rtc.AudioFrame:
-        """
-        Combine the buffered pre-auth audio with the current frame.
-
-        This lets the first ~2.5 seconds of speech reach ai-coustics
-        after authorization instead of being permanently lost.
-        """
-
-        pcm_data, sample_rate, num_channels = (
-            self.buffer.get_audio()
-        )
-
-        current_data = bytes(
-            current_frame.data
-        )
-
-        combined = (
-            pcm_data
-            + current_data
-        )
-
-        self.buffer.clear()
-
-        sample_rate = (
-            sample_rate
-            or current_frame.sample_rate
-        )
-
-        num_channels = (
-            num_channels
-            or current_frame.num_channels
-        )
-
-        samples_per_channel = (
-            len(combined)
-            // (num_channels * 2)
-        )
-
-        return rtc.AudioFrame(
-            data=combined,
-            sample_rate=sample_rate,
-            num_channels=num_channels,
-            samples_per_channel=samples_per_channel,
-        )
 
     def _save_debug_audio(self) -> None:
         import wave
@@ -356,10 +300,14 @@ class SpeakerIdentityProcessor(
             )
         )
 
-        if not pcm_data or sample_rate is None or num_channels is None:
+        if (
+            not pcm_data
+            or sample_rate is None
+            or num_channels is None
+        ):
             return
 
-        path = "/tmp/luna_gate_debug.wav"
+        path = "/tmp/luna_identity_debug.wav"
 
         with wave.open(path, "wb") as wav:
             wav.setnchannels(num_channels)
@@ -367,8 +315,8 @@ class SpeakerIdentityProcessor(
             wav.setframerate(sample_rate)
             wav.writeframes(pcm_data)
 
-        print(
-            "[L.U.N.A.] DEBUG AUDIO SAVED:",
+        luna_log(
+            "DEBUG IDENTITY AUDIO SAVED:",
             path,
             f"({sample_rate}Hz, {num_channels}ch, "
             f"{len(pcm_data)} bytes)"
@@ -379,11 +327,23 @@ class SpeakerIdentityProcessor(
     # ---------------------------------------------------------
 
     def _start_identity_check(self) -> None:
-        if self._identity_task is not None:
+        """
+        Start speaker identification in the background.
+
+        Audio processing continues normally while the embedding
+        model runs in another task/thread.
+        """
+
+        if (
+            self._identity_task is not None
+            and not self._identity_task.done()
+        ):
             return
 
         pcm_data, sample_rate, num_channels = (
-            self.buffer.get_audio(max_seconds=self.REQUIRED_AUDIO_SECONDS)
+            self.buffer.get_audio(
+                max_seconds=self.REQUIRED_AUDIO_SECONDS
+            )
         )
 
         if not pcm_data:
@@ -395,15 +355,15 @@ class SpeakerIdentityProcessor(
         ):
             return
 
-        print(
-            "[L.U.N.A.] Speaker gate: "
-            f"checking identity from "
-            f"{self.buffer.duration():.2f}s of raw audio"
-        )
+        self._last_identity_check_at = time.monotonic()
 
         self._save_debug_audio()
 
-        self._state = "checking"
+        luna_log(
+            "Speaker identity: "
+            f"checking {self.buffer.duration():.2f}s "
+            "of recent audio..."
+        )
 
         self._identity_task = asyncio.create_task(
             self._identify(
@@ -430,40 +390,21 @@ class SpeakerIdentityProcessor(
 
             self.last_match = match
 
-            print(
-                "[L.U.N.A.] Speaker gate: "
+            luna_log(
+                "Speaker identity: "
                 f"{match.name or 'unknown'} "
                 f"({match.confidence:.2f}) "
                 f"authorized={match.authorized}"
             )
 
-            if match.authorized:
-                self._state = "authorized"
-
-                print(
-                    "[L.U.N.A.] Speaker gate: "
-                    "AUTHORIZED — releasing buffered audio."
-                )
-
-            else:
-                self._state = "locked"
-
-                print(
-                    "[L.U.N.A.] Speaker gate: "
-                    "UNAUTHORIZED — dropping audio."
-                )
-
-                self.buffer.clear()
+        except asyncio.CancelledError:
+            raise
 
         except Exception as exc:
-            print(
-                "[L.U.N.A.] Speaker gate error: "
+            luna_log(
+                "Speaker identity error: "
                 f"{exc}"
             )
-
-            self.last_match = None
-            self._state = "locked"
-            self.buffer.clear()
 
         finally:
             self._identity_task = None
@@ -474,7 +415,10 @@ class SpeakerIdentityProcessor(
 
     def reset(self) -> None:
         """
-        Lock the gate for the next speaker attempt.
+        Reset the rolling identity state.
+
+        This does NOT affect downstream audio authorization because
+        this processor is not an authorization gate.
         """
 
         if (
@@ -485,12 +429,9 @@ class SpeakerIdentityProcessor(
 
         self._identity_task = None
 
-        self._state = "locked"
-
-        self.last_match = None
-
         self._speech_started_at = None
         self._last_audio_time = 0.0
+        self._last_identity_check_at = 0.0
 
         self.buffer.clear()
 
@@ -504,99 +445,69 @@ class SpeakerIdentityProcessor(
     ) -> rtc.AudioFrame:
 
         now = time.monotonic()
-        rms = self._rms(frame)
-        is_speech_like = (
-            rms >= self.SPEECH_RMS_THRESHOLD
-        )
 
-        print(
-            "[L.U.N.A.] GATE FRAME:",
-            frame.sample_rate,
-            frame.num_channels,
-            frame.samples_per_channel,
-        )
+        # ---------------------------------------------------------
+        # DISABLED
+        # ---------------------------------------------------------
 
         if not self.enabled:
             return self.downstream._process(frame)
 
-        # ---------------------------------------------------------
-        # AUTHORIZED
-        # ---------------------------------------------------------
+        rms = self._rms(frame)
 
-        if self._state == "authorized":
-
-            # Identity checking intentionally holds the opening speech frames.
-            # Release them once, together with this first authorized frame, so
-            # downstream VAD/STT receives the complete utterance rather than a
-            # clipped tail.
-            if self.buffer.duration() > 0:
-                released = self._release_buffer(frame)
-
-                return self.downstream._process(released)
-
-            if is_speech_like:
-                self._last_audio_time = now
-
-                if self._speech_started_at is None:
-                    self._speech_started_at = now
-
-                    print(
-                        "[L.U.N.A.] Speaker gate: "
-                        "speech detected — buffering."
-                    )
-
-            # If the speaker stops talking, lock again.
-            if (
-                self._last_audio_time
-                and (
-                    now - self._last_audio_time
-                    > self.RESET_SILENCE_SECONDS
-                )
-            ):
-                print(
-                    "[L.U.N.A.] Speaker gate: "
-                    "speech ended — locking."
-                )
-
-                self.reset()
-
-                return self._silence_like(frame)
-
-            # Authorized live audio passes normally.
-            return self.downstream._process(frame)
+        is_speech_like = (
+            rms >= self.SPEECH_RMS_THRESHOLD
+        )
 
         # ---------------------------------------------------------
-        # LOCKED / CHECKING
+        # ALWAYS FORWARD ACTIVE AUDIO
+        # ---------------------------------------------------------
+
+        # Speaker identity NEVER blocks or modifies active-mode
+        # microphone audio.
+
+        downstream_result = (
+            self.downstream._process(frame)
+        )
+
+        # ---------------------------------------------------------
+        # TRACK SPEECH
         # ---------------------------------------------------------
 
         if is_speech_like:
+
             self._last_audio_time = now
 
             if self._speech_started_at is None:
                 self._speech_started_at = now
 
-                print(
-                    "[L.U.N.A.] Speaker gate: "
-                    "speech detected — buffering."
+                luna_log(
+                    "Speaker identity: "
+                    "speech detected."
                 )
 
-        # EVERYTHING BEFORE AUTHORIZATION STAYS HERE.
-        self.buffer.push(frame)
+            self.buffer.push(frame)
 
         # ---------------------------------------------------------
-        # IDENTITY CHECK
+        # BACKGROUND IDENTITY CHECK
         # ---------------------------------------------------------
 
         if (
-            self._state == "locked"
-            and self._speech_started_at is not None
+            self._speech_started_at is not None
             and self.buffer.duration()
             >= self.REQUIRED_AUDIO_SECONDS
+            and (
+                self._last_identity_check_at == 0.0
+                or (
+                    now - self._last_identity_check_at
+                    >= self.IDENTITY_RECHECK_SECONDS
+                )
+            )
         ):
             self._start_identity_check()
 
         # ---------------------------------------------------------
-        # UNAUTHORIZED / CHECKING
+        # SPEECH END
         # ---------------------------------------------------------
 
         if (
@@ -606,13 +517,57 @@ class SpeakerIdentityProcessor(
                 > self.RESET_SILENCE_SECONDS
             )
         ):
-            self.reset()
+            self._speech_started_at = None
+            self._last_audio_time = 0.0
 
-        # HARD GATE:
-        # NOTHING REACHES AI-COUSTICS UNTIL AUTHORIZED.
-        return self._silence_like(frame)
+            # Keep the most recent identity result available to the
+            # rest of L.U.N.A. rather than destroying it at the end
+            # of every utterance.
+
+            self.buffer.clear()
+
+        return downstream_result
+
+    # ---------------------------------------------------------
+    # DOWNSTREAM LIFECYCLE / AUTH PROPAGATION
+    # ---------------------------------------------------------
+
+    def _on_stream_info_updated(
+        self,
+        *,
+        room_name: str,
+        participant_identity: str,
+        publication_sid: str,
+    ) -> None:
+        self.downstream._on_stream_info_updated(
+            room_name=room_name,
+            participant_identity=participant_identity,
+            publication_sid=publication_sid,
+        )
+
+    def _on_stream_info_cleared(self) -> None:
+        self.downstream._on_stream_info_cleared()
+
+    def _on_credentials_updated(
+        self,
+        *,
+        token: str,
+        url: str,
+    ) -> None:
+        self.downstream._on_credentials_updated(
+            token=token,
+            url=url,
+        )
+
+    def _on_credentials_cleared(self) -> None:
+        self.downstream._on_credentials_cleared()
+
+    # ---------------------------------------------------------
+    # CLOSE
+    # ---------------------------------------------------------
 
     def _close(self) -> None:
+
         if (
             self._identity_task is not None
             and not self._identity_task.done()
@@ -625,3 +580,5 @@ class SpeakerIdentityProcessor(
             self.downstream._close()
         except Exception:
             pass
+
+    

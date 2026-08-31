@@ -1,6 +1,7 @@
 import asyncio
 import io
 import wave
+import time
 from typing import AsyncIterable, AsyncGenerator
 
 import requests
@@ -28,6 +29,11 @@ from core.identity.audio import (
     SpeakerIdentityProcessor,
 )
 from core.identity.speaker import SpeakerIdentity
+from core.timing import (
+    TurnTiming,
+    log_turn_timing,
+    luna_log,
+)
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
 from tools.memory import initialize_database
@@ -205,20 +211,6 @@ class Assistant(Agent):
     ) -> AsyncGenerator[str, None]:
         """
         Route live responses through LunaCore.
-
-        LiveKit handles:
-            - realtime turn lifecycle
-            - STT
-            - VAD
-            - interruption handling
-            - conversation state
-
-        LunaCore handles:
-            - task classification
-            - provider selection
-            - online/offline policy
-            - fallback
-            - actual LLM generation
         """
 
         prompt = self._latest_user_message(
@@ -228,39 +220,78 @@ class Assistant(Agent):
         if not prompt:
             return
 
-        conversation = self._conversation_context(
-            chat_ctx
-        )
-
         system_prompt = AGENT_INSTRUCTION
 
-        if conversation:
-            system_prompt += (
-                "\n\nRecent conversation for continuity:\n"
-                f"{conversation}"
-            )
+        timing = TurnTiming()
 
-        print(
-            "[L.U.N.A.] Routing request through Core: "
+        luna_log(
+            "Routing request through Core: "
             f"{prompt}"
         )
+
+        timing.started_at = time.perf_counter()
+
+        core_started = time.perf_counter()
 
         response = await self.luna_core.ask(
             prompt=prompt,
             system_prompt=system_prompt,
         )
 
+        core_total = (
+            time.perf_counter()
+            - core_started
+        )
+
+        timing.add(
+            "core_total",
+            core_total,
+        )
+
         self.last_core_response = response
 
-        print(
-            "[L.U.N.A.] Core response: "
+        metadata = response.metadata
+
+        if metadata.get(
+            "classification_seconds"
+        ) is not None:
+            timing.add(
+                "classification",
+                metadata[
+                    "classification_seconds"
+                ],
+            )
+
+        if metadata.get(
+            "provider_generation_seconds"
+        ) is not None:
+            timing.add(
+                "provider_generation",
+                metadata[
+                    "provider_generation_seconds"
+                ],
+            )
+
+        luna_log(
+            "Core response: "
             f"provider={response.provider} "
             f"model={response.model} "
-            f"task={response.metadata.get('classified_task')}"
+            f"task={metadata.get('classified_task')} "
+            f"latency={core_total:.3f}s"
         )
+
+        if metadata.get("fallback_used"):
+            luna_log(
+                "Core fallback: "
+                f"{metadata.get('fallback_from')} "
+                "-> "
+                f"{response.provider}"
+            )
 
         if response.text:
             yield response.text
+
+        log_turn_timing(timing)
 
     async def on_user_turn_completed(
         self,
@@ -322,18 +353,46 @@ class Assistant(Agent):
         if not full_text:
             return
 
-        print(
-            f"[L.U.N.A.] Kokoro TTS: {full_text}"
+        luna_log(
+            f"Kokoro TTS: {full_text}"
         )
+
+        synthesis_started = time.perf_counter()
 
         wav_bytes = await asyncio.to_thread(
             synthesize_kokoro,
             full_text,
         )
 
-        for frame in wav_to_audio_frames(
-            wav_bytes
-        ):
+        synthesis_time = (
+            time.perf_counter()
+            - synthesis_started
+        )
+
+        audio_frames = list(
+            wav_to_audio_frames(
+                wav_bytes
+            )
+        )
+
+        audio_duration = sum(
+            frame.samples_per_channel
+            / frame.sample_rate
+            for frame in audio_frames
+        )
+
+        luna_log(
+            "Kokoro timing: "
+            f"synthesis={synthesis_time:.3f}s "
+            f"audio={audio_duration:.3f}s "
+            f"rtf={(
+                synthesis_time / audio_duration
+                if audio_duration > 0
+                else 0.0
+            ):.2f}x"
+        )
+
+        for frame in audio_frames:
             yield frame
 
 
@@ -368,9 +427,9 @@ async def my_agent(
         turn_handling=TurnHandlingOptions(
             endpointing=EndpointingOptions(
                 mode="dynamic",
-                min_delay=0.9,
-                max_delay=3.0,
-                alpha=0.5,
+                min_delay=0.45,
+                max_delay=1.5,
+                alpha=0.35,
             ),
 
             interruption=InterruptionOptions(
@@ -433,17 +492,56 @@ async def my_agent(
             ),
         )
 
-        print(
-            "[L.U.N.A.] Speaker identity processor: ONLINE"
+        luna_log(
+            "Speaker identity processor: ONLINE"
         )
 
-        print(
-            "[L.U.N.A.] Generating startup greeting..."
+        luna_log(
+            "Generating startup greeting through Core..."
         )
 
-        await session.generate_reply(
-            instructions=build_session_instruction(),
+        startup_timing = TurnTiming()
+
+        startup_instruction = build_session_instruction()
+
+        luna_log(
+            "Startup prompt loaded from prompts.py."
         )
+
+        startup_core_started = time.perf_counter()
+
+        startup_response = await luna_core.ask(
+            prompt=startup_instruction,
+            system_prompt=AGENT_INSTRUCTION,
+        )
+
+        startup_core_seconds = (
+            time.perf_counter()
+            - startup_core_started
+        )
+
+        startup_timing.add(
+            "core_generation",
+            startup_core_seconds,
+        )
+
+        luna_log(
+            "Startup Core response: "
+            f"provider={startup_response.provider} "
+            f"model={startup_response.model} "
+            f"latency={startup_core_seconds:.3f}s"
+        )
+
+        if startup_response.text:
+            luna_log(
+                f"Startup greeting: {startup_response.text}"
+            )
+
+            await session.say(
+                startup_response.text
+            )
+
+        log_turn_timing(startup_timing)
 
     finally:
         await standby_manager.shutdown()

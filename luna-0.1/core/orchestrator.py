@@ -1,5 +1,6 @@
 import asyncio
 import re
+import time
 
 from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
@@ -355,11 +356,20 @@ class LunaCore:
         # NORMAL REQUEST
         # ---------------------------------------------------------
 
+        classification_started = time.perf_counter()
+
         if task is None:
-            classification = self.classifier.classify(prompt)
+            classification = self.classifier.classify(
+                prompt
+            )
             task = classification.task
         else:
             classification = None
+
+        classification_seconds = (
+            time.perf_counter()
+            - classification_started
+        )
 
         combined_system_prompt = CORE_SYSTEM_PROMPT
 
@@ -392,7 +402,16 @@ class LunaCore:
             },
         )
 
-        response = await self.router.generate(request)
+        provider_started = time.perf_counter()
+
+        response = await self.router.generate(
+            request
+        )
+
+        provider_generation_seconds = (
+            time.perf_counter()
+            - provider_started
+        )
 
         tool_calls = parse_tool_calls(response.text)
 
@@ -434,6 +453,12 @@ class LunaCore:
             response.metadata["tools_used"] = []
 
         response.metadata.update({
+            "classification_seconds": (
+                classification_seconds
+            ),
+            "provider_generation_seconds": (
+                provider_generation_seconds
+            ),
             "classified_task": task,
             "listening": self.listening,
         })

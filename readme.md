@@ -14,7 +14,7 @@ The goal is simple:
 
 ## Current Status
 
-**Version:** v0.05.4.4
+**Version:** v0.05.4.5.3
 **Development:** Active
 
 L.U.N.A. currently has a working realtime voice interface powered by
@@ -27,54 +27,48 @@ designed to support multiple AI brains and automatic fallback.
 
 L.U.N.A. is being built as a layered system rather than a single AI model.
 
-```text
-                         L.U.N.A. CORE
-                              │
-              ┌───────────────┼───────────────┐
-              │               │               │
-           MEMORY           ROUTER           TOOLS
-              │               │               │
-              │        ┌──────┼──────┐        │
-              │        ↓      ↓      ↓        │
-              │      Gemini  Local  OpenAI     │
-              │               │               │
-              └───────────────┴───────────────┘
-                              │
-                              ↓
-                         Voice Layer
-                              │
-                           LiveKit
-
-
-                           🎤 MIC
-                              │
-                              ▼
-                              ┌──────────────────────┐
-                              │ SPEAKER IDENTITY GATE│
-                              │                      │
-                              │  WHO THE FUCK IS THIS│
-                              └──────────┬───────────┘
-                                       │
-                                    ┌────┴─────┐
-                                    │          │
-                                 DENIED      ALLOWED
-                                    │          │
-                                 DROP     RELEASE
-                                             │
-                                             ▼
-                                       ai-coustics
-                                             │
-                                             ▼
-                                          Silero
-                                             │
-                                             ▼
-                                             Groq
-                                             │
-                                             ▼
-                                             LUNA
-
-
-                                             
+                         ┌──────────────────────┐
+                         │       L.U.N.A.       │
+                         │    Personality       │
+                         │    Memory            │
+                         │    Context           │
+                         │    Agency            │
+                         └──────────┬───────────┘
+                                    │
+                              ORCHESTRATOR
+                                    │
+             ┌──────────────────────┼──────────────────────┐
+             │                      │                      │
+        ATTENTION                TASKS                  MEMORY
+             │                      │                      │
+       "Should I speak?"      "What am I doing?"     "What do I know?"
+             │                      │                      │
+             └──────────────────────┼──────────────────────┘
+                                    │
+                              CORE / ROUTER
+                                    │
+                  ┌─────────────────┼─────────────────┐
+                  │                 │                 │
+                LOCAL            CLOUD             TOOLS
+                  │                 │                 │
+               Ollama            Gemini            Computer
+               local LLM          Groq              Web
+               Kokoro             etc.              Email
+               Whisper                                Files
+                  │
+                  ↓
+             RASPBERRY PI 5
+                  │
+       ┌──────────┼──────────┐
+       │          │          │
+      MIC       SPEAKER    NETWORK
+       │                     │
+       ↓                     ↓
+     VAD                  DEVICES
+     Wake                 Mac
+     Voice ID             PC
+     Attention            Phone
+                          Car    
 
                            L.U.N.A. v0.05
 

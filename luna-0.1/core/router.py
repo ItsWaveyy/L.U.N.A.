@@ -1,4 +1,5 @@
 import os
+import time
 
 from core.providers.base import AIProvider, AIRequest, AIResponse
 
@@ -64,11 +65,21 @@ class AIRouter:
         last_error = None
 
         for index, provider in enumerate(candidates):
-            attempted_providers.append(provider.name)
+            attempted_providers.append(
+                provider.name
+            )
+
+            provider_started = time.perf_counter()
 
             try:
-                response = await provider.generate(request)
+                response = await provider.generate(
+                    request
+                )
 
+                provider_seconds = (
+                    time.perf_counter()
+                    - provider_started
+                )
                 response.metadata.update({
                     "task": request.task,
                     "requires_network": requires_network,
@@ -80,6 +91,9 @@ class AIRouter:
                     "mode": self.mode,
                     "provider_attempts": len(attempted_providers),
                     "providers_tried": attempted_providers,
+                    "provider_generation_seconds": (
+                        provider_seconds
+                    ),
                 })
 
                 if index > 0:
