@@ -201,7 +201,11 @@ class KokoroChunkedStream(tts.ChunkedStream):
                 frame.data.tobytes()
             )
 
-        output_emitter.flush()    """Non-streaming LiveKit TTS stream backed by Kokoro."""
+        output_emitter.flush()
+
+
+class KokoroChunkedStream(tts.ChunkedStream):
+    """Non-streaming LiveKit TTS stream backed by Kokoro."""
 
     def __init__(
         self,
@@ -218,7 +222,10 @@ class KokoroChunkedStream(tts.ChunkedStream):
 
         self._kokoro = tts
 
-    async def _run(self, output_emitter: tts.AudioEmitter) -> None:
+    async def _run(
+        self,
+        output_emitter: tts.AudioEmitter,
+    ) -> None:
         started = time.perf_counter()
 
         wav_bytes = await asyncio.to_thread(
@@ -233,9 +240,7 @@ class KokoroChunkedStream(tts.ChunkedStream):
         )
 
         frames = list(
-            wav_to_audio_frames(
-                wav_bytes
-            )
+            wav_to_audio_frames(wav_bytes)
         )
 
         audio_duration = sum(
@@ -255,14 +260,17 @@ class KokoroChunkedStream(tts.ChunkedStream):
             ): .2f}x"
         )
 
+        output_emitter.initialize(
+            request_id="kokoro",
+            sample_rate=self._kokoro.sample_rate,
+            num_channels=self._kokoro.num_channels,
+            mime_type="audio/pcm",
+            stream=False,
+        )
+
         for frame in frames:
-            self._event_ch.send_nowait(
-                tts.SynthesizedAudio(
-                    frame=frame,
-                    request_id=self.request_id,
-                )
+            output_emitter.push(
+                frame.data.tobytes()
             )
 
-        self._event_ch.send_nowait(
-            None
-        )
+        output_emitter.flush()

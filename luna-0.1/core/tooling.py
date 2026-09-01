@@ -126,7 +126,7 @@ def build_default_tool_registry() -> ToolRegistry:
         subject: str,
         body: str,
     ) -> str:
-        from tools.email import send_email_message
+        from tools.email_tool import send_email_message
         return await send_email_message(recipient, subject, body)
 
     return ToolRegistry([

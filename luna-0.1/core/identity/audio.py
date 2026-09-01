@@ -1,9 +1,12 @@
 from collections import deque
 import asyncio
 import time
+import wave
 
 import numpy as np
 from livekit import rtc
+
+from pathlib import Path
 
 from core.identity.speaker import SpeakerIdentity, SpeakerMatch
 from core.timing import luna_log
@@ -292,7 +295,15 @@ class SpeakerIdentityProcessor(
     # ---------------------------------------------------------
 
     def _save_debug_audio(self) -> None:
-        import wave
+        """
+        Save the exact raw microphone audio used for a speaker
+        identity check.
+
+        These recordings are calibration samples only. They are
+        intentionally captured before ai-coustics / VAD processing
+        so they represent the same raw audio that reaches the
+        identity system.
+        """
 
         pcm_data, sample_rate, num_channels = (
             self.buffer.get_audio(
@@ -307,17 +318,49 @@ class SpeakerIdentityProcessor(
         ):
             return
 
-        path = "/tmp/luna_identity_debug.wav"
+        output_dir = (
+            Path(__file__).resolve().parents[2]
+            / "data"
+            / "speakers"
+            / "test"
+        )
 
-        with wave.open(path, "wb") as wav:
+        output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        existing = sorted(
+            output_dir.glob(
+                "live_*.wav"
+            )
+        )
+
+        next_number = len(existing) + 1
+
+        while (
+            output_dir
+            / f"live_{next_number:03d}.wav"
+        ).exists():
+            next_number += 1
+
+        output_path = (
+            output_dir
+            / f"live_{next_number:03d}.wav"
+        )
+
+        with wave.open(
+            str(output_path),
+            "wb",
+        ) as wav:
             wav.setnchannels(num_channels)
             wav.setsampwidth(2)
             wav.setframerate(sample_rate)
             wav.writeframes(pcm_data)
 
         luna_log(
-            "DEBUG IDENTITY AUDIO SAVED:",
-            path,
+            "IDENTITY CALIBRATION SAMPLE SAVED:",
+            str(output_path),
             f"({sample_rate}Hz, {num_channels}ch, "
             f"{len(pcm_data)} bytes)"
         )
