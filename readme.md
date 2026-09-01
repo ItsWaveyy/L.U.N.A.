@@ -14,7 +14,7 @@ The goal is simple:
 
 ## Current Status
 
-**Version:** v0.05.4.5.3
+**Version:** v0.05.5
 **Development:** Active
 
 L.U.N.A. currently has a working realtime voice interface powered by
@@ -69,14 +69,3 @@ L.U.N.A. is being built as a layered system rather than a single AI model.
      Voice ID             PC
      Attention            Phone
                           Car    
-
-                           L.U.N.A. v0.05
-
-         Smart routing             ████████████████████  DONE
-         Offline Core              ████████████████████  DONE
-         Voice intelligence        █████████████████░░░  ~90%
-         Speaker identity          █████████████░░░░░░░  ~65%
-         Core → Agent integration  ████░░░░░░░░░░░░░░░░  NOT DONE
-         Full offline operation    ██░░░░░░░░░░░░░░░░░░  NOT DONE
-         Full online operation     █████████████░░░░░░░  PARTIAL
-         Failure/recovery          ██░░░░░░░░░░░░░░░░░░  NOT DONE

@@ -359,8 +359,8 @@ class SpeakerIdentityProcessor(
             wav.writeframes(pcm_data)
 
         luna_log(
-            "IDENTITY CALIBRATION SAMPLE SAVED:",
-            str(output_path),
+            "IDENTITY CALIBRATION SAMPLE SAVED: "
+            f"{output_path} "
             f"({sample_rate}Hz, {num_channels}ch, "
             f"{len(pcm_data)} bytes)"
         )
