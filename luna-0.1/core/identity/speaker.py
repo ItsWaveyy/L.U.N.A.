@@ -213,6 +213,7 @@ class SpeakerIdentity:
         name: str,
         wav_paths: list[str | os.PathLike],
         authorized: bool = True,
+        append: bool = False,
     ) -> None:
         if not name.strip():
             raise ValueError(
@@ -245,6 +246,29 @@ class SpeakerIdentity:
                 embedding.tolist()
             )
 
+        existing_profile = self._profiles.get(name)
+
+        if append and existing_profile:
+            existing_embeddings = existing_profile.get(
+                "embeddings",
+                [],
+            )
+
+            embeddings = (
+                existing_embeddings
+                + embeddings
+            )
+
+            authorized = existing_profile.get(
+                "authorized",
+                authorized,
+            )
+
+            print(
+                f"[L.U.N.A.] Appending {len(wav_paths)} "
+                f"new enrollment sample(s) to {name}."
+            )
+
         self._profiles[name] = {
             "authorized": bool(authorized),
             "embeddings": embeddings,
@@ -259,6 +283,96 @@ class SpeakerIdentity:
     # ---------------------------------------------------------
     # AUDIO → WAV
     # ---------------------------------------------------------
+
+    @staticmethod
+    def _resample_pcm_to_16k(
+        pcm_data: bytes,
+        sample_rate: int,
+        num_channels: int,
+    ) -> tuple[bytes, int, int]:
+        """
+        Convert speaker-identification audio to 16 kHz.
+
+        This affects ONLY the audio representation sent to the
+        speaker embedding model. The downstream LiveKit audio
+        pipeline remains untouched.
+        """
+
+        target_sample_rate = 16000
+
+        if sample_rate == target_sample_rate:
+            return (
+                pcm_data,
+                sample_rate,
+                num_channels,
+            )
+
+        samples = np.frombuffer(
+            pcm_data,
+            dtype=np.int16,
+        ).astype(np.float32)
+
+        if samples.size == 0:
+            return (
+                b"",
+                target_sample_rate,
+                num_channels,
+            )
+
+        if num_channels > 1:
+            samples = samples.reshape(
+                -1,
+                num_channels,
+            ).mean(axis=1)
+
+        source_length = len(samples)
+
+        target_length = int(
+            round(
+                source_length
+                * target_sample_rate
+                / sample_rate
+            )
+        )
+
+        if target_length <= 0:
+            return (
+                b"",
+                target_sample_rate,
+                1,
+            )
+
+        source_positions = np.linspace(
+            0.0,
+            1.0,
+            source_length,
+            endpoint=False,
+        )
+
+        target_positions = np.linspace(
+            0.0,
+            1.0,
+            target_length,
+            endpoint=False,
+        )
+
+        resampled = np.interp(
+            target_positions,
+            source_positions,
+            samples,
+        )
+
+        resampled = np.clip(
+            np.round(resampled),
+            -32768,
+            32767,
+        ).astype(np.int16)
+
+        return (
+            resampled.tobytes(),
+            target_sample_rate,
+            1,
+        )
 
     @staticmethod
     def _pcm_to_wav(
@@ -320,10 +434,18 @@ class SpeakerIdentity:
                 ),
             )
 
+        identity_pcm, identity_sample_rate, identity_channels = (
+            self._resample_pcm_to_16k(
+                pcm_data,
+                sample_rate,
+                num_channels,
+            )
+        )
+
         wav_path = self._pcm_to_wav(
-            pcm_data,
-            sample_rate,
-            num_channels,
+            identity_pcm,
+            identity_sample_rate,
+            identity_channels,
         )
 
         try:

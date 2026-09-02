@@ -98,6 +98,15 @@ def main() -> None:
         ),
     )
 
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help=(
+            "Append new recordings to an existing "
+            "speaker profile instead of replacing it."
+        ),
+    )
+
     args = parser.parse_args()
 
     if args.clips < 1:
@@ -160,6 +169,7 @@ def main() -> None:
         name=args.name,
         wav_paths=recordings,
         authorized=not args.unauthorized,
+        append=args.append,
     )
 
     print()

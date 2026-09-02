@@ -241,6 +241,16 @@ class SpeakerIdentityProcessor(
 
         self._enabled = True
 
+        # Speaker authorization state.
+        #
+        # None  = identity has not been established yet.
+        # True  = authorized speaker identified.
+        # False = unauthorized / unknown speaker identified.
+        #
+        # This state controls whether active microphone audio is
+        # allowed to continue downstream.
+        self._authorized: bool | None = None
+
         self._identity_task: asyncio.Task | None = None
 
         self._last_audio_time = 0.0
@@ -433,6 +443,17 @@ class SpeakerIdentityProcessor(
 
             self.last_match = match
 
+            self._authorized = (
+                match is not None
+                and match.authorized
+                and match.name is not None
+            )
+
+            luna_log(
+                f"Speaker authorization state: "
+                f"{self._authorized}"
+            )
+
             luna_log(
                 "Speaker identity: "
                 f"{match.name or 'unknown'} "
@@ -472,6 +493,8 @@ class SpeakerIdentityProcessor(
 
         self._identity_task = None
 
+        self._authorized = None
+
         self._speech_started_at = None
         self._last_audio_time = 0.0
         self._last_identity_check_at = 0.0
@@ -509,10 +532,8 @@ class SpeakerIdentityProcessor(
         # Speaker identity NEVER blocks or modifies active-mode
         # microphone audio.
 
-        downstream_result = (
-            self.downstream._process(frame)
-        )
-
+        downstream_result = self.downstream.process(frame)
+        
         # ---------------------------------------------------------
         # TRACK SPEECH
         # ---------------------------------------------------------
