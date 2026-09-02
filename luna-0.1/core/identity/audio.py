@@ -11,6 +11,8 @@ from pathlib import Path
 from core.identity.speaker import SpeakerIdentity, SpeakerMatch
 from core.timing import luna_log
 
+from typing import Callable
+
 
 class SpeakerAudioBuffer:
     """
@@ -234,10 +236,12 @@ class SpeakerIdentityProcessor(
         buffer: SpeakerAudioBuffer,
         speaker_identity: SpeakerIdentity,
         downstream: rtc.FrameProcessor[rtc.AudioFrame],
+        on_identified: Callable[[SpeakerMatch | None], None] | None = None,
     ):
         self.buffer = buffer
         self.speaker_identity = speaker_identity
         self.downstream = downstream
+        self.on_identified = on_identified
 
         self._enabled = True
 
@@ -449,6 +453,9 @@ class SpeakerIdentityProcessor(
                 and match.name is not None
             )
 
+            if self.on_identified is not None:
+                self.on_identified(match)
+
             luna_log(
                 f"Speaker authorization state: "
                 f"{self._authorized}"
@@ -532,7 +539,7 @@ class SpeakerIdentityProcessor(
         # Speaker identity NEVER blocks or modifies active-mode
         # microphone audio.
 
-        downstream_result = self.downstream.process(frame)
+        downstream_result = self.downstream._process(frame)
         
         # ---------------------------------------------------------
         # TRACK SPEECH

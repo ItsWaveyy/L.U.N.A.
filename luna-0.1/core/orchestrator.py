@@ -7,6 +7,7 @@ from core.router import AIRouter
 from core.classifier import TaskClassifier
 from core.standby.manager import StandbyManager
 from core.tooling import ToolRegistry, build_default_tool_registry, parse_tool_calls
+from core.identity.speaker import SpeakerMatch
 
 
 CORE_SYSTEM_PROMPT = """
@@ -212,6 +213,7 @@ class LunaCore:
         self.router = AIRouter(providers)
         self.classifier = TaskClassifier()
         self.tools = tools or build_default_tool_registry()
+        self.current_speaker: SpeakerMatch | None = None
         self.listening = True
         self._warmup_task = None
 
@@ -229,6 +231,24 @@ class LunaCore:
     def set_listening(self, state: bool) -> bool:
         self.listening = bool(state)
         return self.listening
+
+    def set_speaker(
+        self,
+        match: SpeakerMatch | None,
+    ) -> None:
+        """Update the speaker currently associated with the active session."""
+
+        self.current_speaker = match
+
+        if match is None:
+            print("[L.U.N.A.] Current speaker: unknown")
+            return
+
+        print(
+            "[L.U.N.A.] Current speaker: "
+            f"{match.name or 'unknown'} "
+            f"({match.confidence:.2f})"
+        )
 
     def _contains_phrase(
         self,

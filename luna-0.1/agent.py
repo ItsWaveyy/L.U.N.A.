@@ -331,6 +331,7 @@ async def my_agent(
             buffer=speaker_buffer,
             speaker_identity=speaker_identity,
             downstream=ai_coustics_processor,
+            on_identified=luna_core.set_speaker,
         )
 
         await session.start(
