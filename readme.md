@@ -14,7 +14,7 @@ The goal is simple:
 
 ## Current Status
 
-**Version:** v0.05.5
+**Version:** v0.05.5.4
 **Development:** Active
 
 L.U.N.A. currently has a working realtime voice interface powered by

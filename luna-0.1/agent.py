@@ -209,6 +209,10 @@ class Assistant(Agent):
             )
 
         if response.text:
+            self.luna_core.record_assistant_message(
+                response.text
+            )
+
             yield response.text
 
         log_turn_timing(timing)
@@ -241,6 +245,10 @@ class Assistant(Agent):
 
         if not transcript:
             raise StopResponse()
+
+        self.luna_core.record_user_message(
+            transcript
+        )
 
         await self.sleep_controller.handle_transcript(
             transcript
@@ -316,90 +324,113 @@ async def my_agent(
         standby_manager=standby_manager,
     )
 
-    try:
-        speaker_identity = SpeakerIdentity()
-
-        speaker_buffer = SpeakerAudioBuffer(
-            max_seconds=8.0,
+    async def cleanup():
+        luna_log(
+            "Shutdown: ending conversation session..."
         )
 
-        ai_coustics_processor = (
-            ai_coustics.audio_enhancement()
-        )
+        luna_core.conversations.end_session()
 
-        speaker_processor = SpeakerIdentityProcessor(
-            buffer=speaker_buffer,
-            speaker_identity=speaker_identity,
-            downstream=ai_coustics_processor,
-            on_identified=luna_core.set_speaker,
-        )
-
-        await session.start(
-            room=ctx.room,
-            agent=Assistant(
-                sleep_controller=sleep_controller,
-                luna_core=luna_core,
-            ),
-            room_options=room_io.RoomOptions(
-                audio_input=room_io.AudioInputOptions(
-                    noise_cancellation=speaker_processor,
-                ),
-            ),
+        luna_log(
+            "Shutdown: conversation session ended."
         )
 
         luna_log(
-            "Speaker identity processor: ONLINE"
+            "Shutdown: stopping standby manager..."
         )
 
-        luna_log(
-            "Generating startup greeting through Core..."
-        )
-
-        startup_timing = TurnTiming()
-
-        startup_instruction = build_session_instruction()
-
-        luna_log(
-            "Startup prompt loaded from prompts.py."
-        )
-
-        startup_core_started = time.perf_counter()
-
-        startup_response = await luna_core.ask(
-            prompt=startup_instruction,
-            system_prompt=AGENT_INSTRUCTION,
-        )
-
-        startup_core_seconds = (
-            time.perf_counter()
-            - startup_core_started
-        )
-
-        startup_timing.add(
-            "core_generation",
-            startup_core_seconds,
-        )
-
-        luna_log(
-            "Startup Core response: "
-            f"provider={startup_response.provider} "
-            f"model={startup_response.model} "
-            f"latency={startup_core_seconds:.3f}s"
-        )
-
-        if startup_response.text:
-            luna_log(
-                f"Startup greeting: {startup_response.text}"
-            )
-
-            await session.say(
-                startup_response.text
-            )
-
-        log_turn_timing(startup_timing)
-
-    finally:
         await standby_manager.shutdown()
+
+        luna_log(
+            "Shutdown: standby manager stopped."
+        )
+
+    def on_session_close(event):
+        asyncio.create_task(cleanup())
+
+    session.on("close", on_session_close)
+
+
+    speaker_identity = SpeakerIdentity()
+
+    speaker_buffer = SpeakerAudioBuffer(
+        max_seconds=8.0,
+    )
+
+    ai_coustics_processor = (
+        ai_coustics.audio_enhancement()
+    )
+
+    speaker_processor = SpeakerIdentityProcessor(
+        buffer=speaker_buffer,
+        speaker_identity=speaker_identity,
+        downstream=ai_coustics_processor,
+        on_identified=luna_core.set_speaker,
+    )
+
+    await session.start(
+        room=ctx.room,
+        agent=Assistant(
+            sleep_controller=sleep_controller,
+            luna_core=luna_core,
+        ),
+        room_options=room_io.RoomOptions(
+            audio_input=room_io.AudioInputOptions(
+                noise_cancellation=speaker_processor,
+            ),
+        ),
+    )
+
+    luna_log(
+        "Speaker identity processor: ONLINE"
+    )
+
+    luna_log(
+        "Generating startup greeting through Core..."
+    )
+
+    startup_timing = TurnTiming()
+
+    startup_instruction = build_session_instruction()
+
+    luna_log(
+        "Startup prompt loaded from prompts.py."
+    )
+
+    startup_core_started = time.perf_counter()
+
+    startup_response = await luna_core.ask(
+        prompt=startup_instruction,
+        system_prompt=AGENT_INSTRUCTION,
+    )
+
+    startup_core_seconds = (
+        time.perf_counter()
+        - startup_core_started
+    )
+
+    startup_timing.add(
+        "core_generation",
+        startup_core_seconds,
+    )
+
+    luna_log(
+        "Startup Core response: "
+        f"provider={startup_response.provider} "
+        f"model={startup_response.model} "
+        f"latency={startup_core_seconds:.3f}s"
+    )
+
+    if startup_response.text:
+        luna_log(
+            f"Startup greeting: {startup_response.text}"
+        )
+
+        await session.say(
+            startup_response.text
+        )
+
+    log_turn_timing(startup_timing)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from core.router import AIRouter
 from core.classifier import TaskClassifier
 from core.standby.manager import StandbyManager
 from core.tooling import ToolRegistry, build_default_tool_registry, parse_tool_calls
+from core.conversation import ConversationStore
 from core.identity.speaker import SpeakerMatch
 
 
@@ -213,7 +214,10 @@ class LunaCore:
         self.router = AIRouter(providers)
         self.classifier = TaskClassifier()
         self.tools = tools or build_default_tool_registry()
-        self.current_speaker: SpeakerMatch | None = None
+
+        self.conversations = ConversationStore()
+        self.conversations.start_session()
+
         self.listening = True
         self._warmup_task = None
 
@@ -231,6 +235,24 @@ class LunaCore:
     def set_listening(self, state: bool) -> bool:
         self.listening = bool(state)
         return self.listening
+
+    def record_user_message(
+        self,
+        content: str,
+    ) -> None:
+        self.conversations.add_message(
+            role="user",
+            content=content,
+        )
+
+    def record_assistant_message(
+        self,
+        content: str,
+    ) -> None:
+        self.conversations.add_message(
+            role="assistant",
+            content=content,
+        )
 
     def set_speaker(
         self,
@@ -399,14 +421,69 @@ class LunaCore:
                 f"{system_prompt}"
             )
 
-        combined_system_prompt += (
-            "\n\nAvailable Core tools:\n"
-            f"{self.tools.definitions()}\n\n"
-            "When a tool is necessary, reply with only valid JSON in this "
-            "exact shape: {\"tool_calls\":[{\"name\":\"tool_name\","
-            "\"arguments\":{...}}]}. Do not use a tool for ordinary "
-            "conversation. Only use send_email after the user explicitly asks "
-            "to send it, and include explicit_request=true."
+        tool_definitions = self.tools.definitions()
+
+        if (
+            classification is not None
+            and classification.requires_network
+        ):
+            tool_instructions = (
+                "\n\nAvailable Core tools:\n"
+                f"{tool_definitions}\n\n"
+                "When a tool is necessary, reply with only valid JSON in this "
+                "exact shape: {\"tool_calls\":[{\"name\":\"tool_name\","
+                "\"arguments\":{...}}]}. Do not use a tool for ordinary "
+                "conversation. Only use send_email after the user explicitly asks "
+                "to send it, and include explicit_request=true."
+            )
+        else:
+            tool_instructions = (
+                "\n\nNo network access is required for this request. "
+                "Answer directly using your available knowledge. "
+                "Do not use network-dependent tools such as web search."
+            )
+
+        combined_system_prompt += tool_instructions
+
+        # ---------------------------------------------------------
+        # LOCAL PROVIDER PROMPT
+        # ---------------------------------------------------------
+
+        local_system_prompt = (
+            "You are L.U.N.A., a personal AI assistant.\n"
+            "You are running as L.U.N.A. Core's local reasoning provider.\n"
+            "Answer the user's request directly and concisely.\n"
+            "Do not claim internet access or current information when offline.\n"
+            "Follow any additional instructions provided for this request.\n"
+        )
+
+        if system_prompt:
+            local_system_prompt += (
+                "\nAdditional instructions:\n"
+                f"{system_prompt}"
+            )
+
+        if (
+            classification is not None
+            and classification.requires_network
+        ):
+            local_system_prompt += (
+                "\n\nAvailable Core tools:\n"
+                f"{tool_definitions}\n\n"
+                "When a tool is necessary, reply with only valid JSON in this "
+                "exact shape: {\"tool_calls\":[{\"name\":\"tool_name\","
+                "\"arguments\":{...}}]}. "
+                "Do not answer the request directly when a listed tool is "
+                "required. "
+                "Do not use tools for ordinary conversation. "
+                "Only use send_email after the user explicitly asks to send it, "
+                "and include explicit_request=true."
+            )
+
+        requires_network = (
+            classification.requires_network
+            if classification is not None
+            else False
         )
 
         request = AIRequest(
@@ -414,14 +491,11 @@ class LunaCore:
             task=task,
             system_prompt=combined_system_prompt,
             metadata={
-                "requires_network": (
-                    classification.requires_network
-                    if classification is not None
-                    else False
-                ),
+                "requires_network": requires_network,
+                "network_allowed": requires_network,
+                "local_system_prompt": local_system_prompt,
             },
         )
-
         provider_started = time.perf_counter()
 
         response = await self.router.generate(
@@ -442,7 +516,13 @@ class LunaCore:
                 result = await self.tools.execute(
                     name,
                     arguments,
-                    offline=self.router.mode == "offline",
+                    offline=(
+                        self.router.mode == "offline"
+                        or not request.metadata.get(
+                            "network_allowed",
+                            False,
+                        )
+                    ),
                 )
                 tool_results.append({
                     "name": name,

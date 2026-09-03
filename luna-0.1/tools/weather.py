@@ -146,10 +146,10 @@ def _format_current_weather(
     ]
 
     if temperature is not None:
-        parts.append(f"{temperature:.0f}°F")
+        parts.append(f"{temperature:.0f}°Fahrenheit")
 
     if apparent is not None:
-        parts.append(f"feels like {apparent:.0f}°F")
+        parts.append(f"feels like {apparent:.0f}°Fahrenheit")
 
     parts.append(description)
 
@@ -157,7 +157,7 @@ def _format_current_weather(
         parts.append(f"humidity {humidity}%")
 
     if wind is not None:
-        parts.append(f"wind {wind:.0f} mph")
+        parts.append(f"wind {wind:.0f} miles per hour")
 
     return ", ".join(parts)
 
@@ -216,10 +216,10 @@ def _format_forecast(
         line = f"{date}:"
 
         if high is not None:
-            line += f" high {high:.0f}°F"
+            line += f" high {high:.0f}°Fahrenheit"
 
         if low is not None:
-            line += f", low {low:.0f}°F"
+            line += f", low {low:.0f}°Fahrenheit"
 
         line += f", {description}"
 

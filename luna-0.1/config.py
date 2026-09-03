@@ -27,8 +27,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 # Local AI
 OLLAMA_BASE_URL = os.getenv(
-    "OLLAMA_BASE_URL",
-    "http://localhost:11434",
+    "OLLAMA_BASE_URL", "http://127.0.0.1:11434"
 )
 
 # LiveKit

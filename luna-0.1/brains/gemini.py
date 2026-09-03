@@ -49,6 +49,11 @@ class GeminiProvider(AIProvider):
         response = await self.client.aio.models.generate_content(
             model=self.model,
             contents=prompt,
+            config=types.GenerateContentConfig(
+                automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                    disable=True,
+                ),
+            ),
         )
 
         return AIResponse(

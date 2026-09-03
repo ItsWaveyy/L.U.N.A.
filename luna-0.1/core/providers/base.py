@@ -26,6 +26,14 @@ class AIProvider:
     async def generate(self, request: AIRequest) -> AIResponse:
         raise NotImplementedError
 
+    def prepare_request(
+        self,
+        request: AIRequest,
+    ) -> AIRequest:
+        """Allow providers to adapt requests before generation."""
+
+        return request
+
     async def health_check(self) -> bool:
         return True
 

@@ -74,9 +74,56 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
-        # ---------------------------------------------------------
+        # CONVERSATION
+        conversation_keywords = (
+            "what do you think",
+            "do you think",
+            "how do you feel",
+            "what would you do",
+            "your opinion",
+            "tell me about yourself",
+            "let's talk",
+            "talk to me",
+            "i feel",
+            "i'm feeling",
+            "i am feeling",
+            "how are you",
+            "how you doing",
+            "how are things",
+            "what's up",
+            "whats up",
+        )
+
+        if any(keyword in text for keyword in conversation_keywords):
+            return Classification(
+                task="conversation",
+                confidence=0.90,
+                reason="Detected an open-ended conversational request.",
+                requires_network=requires_network,
+            )
+
+        # WEATHER / LIVE UTILITY
+        weather_keywords = (
+            "weather",
+            "forecast",
+            "temperature",
+            "rain",
+            "snow",
+            "humidity",
+            "wind",
+            "wind speed",
+            "conditions",
+        )
+
+        if any(keyword in text for keyword in weather_keywords):
+            return Classification(
+                task="fast",
+                confidence=0.95,
+                reason="Detected a weather or live utility request.",
+                requires_network=requires_network,
+            )
+
         # CODING
-        # ---------------------------------------------------------
         coding_keywords = (
             "python",
             "javascript",
@@ -114,9 +161,7 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
-        # ---------------------------------------------------------
         # CREATIVE
-        # ---------------------------------------------------------
         creative_keywords = (
             "write me",
             "write a",
@@ -143,14 +188,12 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
-        # ---------------------------------------------------------
-        # RESEARCH
-        # ---------------------------------------------------------
+        # RESEARCH / CURRENT INFORMATION
         research_keywords = (
-            "today",
             "latest",
             "recent",
             "news",
+            "currently",
             "current",
             "right now",
             "this week",
@@ -165,6 +208,9 @@ class TaskClassifier:
             "study",
             "studies",
             "what happened",
+            "what's happening",
+            "who won",
+            "who is winning",
         )
 
         if any(keyword in text for keyword in research_keywords):
@@ -175,34 +221,7 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
-        # ---------------------------------------------------------
-        # CONVERSATION
-        # ---------------------------------------------------------
-        conversation_keywords = (
-            "what do you think",
-            "do you think",
-            "how do you feel",
-            "what would you do",
-            "your opinion",
-            "tell me about yourself",
-            "let's talk",
-            "talk to me",
-            "i feel",
-            "i'm feeling",
-            "i am feeling",
-        )
-
-        if any(keyword in text for keyword in conversation_keywords):
-            return Classification(
-                task="conversation",
-                confidence=0.85,
-                reason="Detected an open-ended conversational request.",
-                requires_network=requires_network,
-            )
-
-        # ---------------------------------------------------------
         # FAST
-        # ---------------------------------------------------------
         fast_keywords = (
             "what is",
             "what's",
@@ -218,6 +237,7 @@ class TaskClassifier:
             "convert",
             "how long",
             "how far",
+            "what about",
         )
 
         if any(keyword in text for keyword in fast_keywords):
@@ -228,9 +248,6 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
-        # ---------------------------------------------------------
-        # DEFAULT
-        # ---------------------------------------------------------
         return Classification(
             task="general",
             confidence=0.60,

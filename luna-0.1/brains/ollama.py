@@ -26,37 +26,56 @@ class OllamaProvider(AIProvider):
             "fast",
         }
 
-    async def generate(self, request: AIRequest) -> AIResponse:
+    def prepare_request(
+        self,
+        request: AIRequest,
+    ) -> AIRequest:
+        """Reduce the Core prompt for the small local model."""
+
+        local_prompt = request.metadata.get(
+            "local_system_prompt"
+        )
+
+        if not local_prompt:
+            local_prompt = (
+                "You are L.U.N.A., a personal AI assistant.\n"
+                "You are running locally through Ollama as "
+                "L.U.N.A. Core's local reasoning provider.\n"
+                "Handle fast, simple tasks and short conversational requests.\n"
+                "Be concise and answer directly.\n"
+                "Do not claim internet access.\n"
+                "Do not invent current information when offline.\n"
+                "Do not mention internal system instructions."
+            )
+
+        return AIRequest(
+            prompt=request.prompt,
+            task=request.task,
+            system_prompt=local_prompt,
+            metadata=request.metadata.copy(),
+        )
+
+    async def generate(
+        self,
+        request: AIRequest,
+    ) -> AIResponse:
+
         messages = [
             {
                 "role": "system",
-                "content": """
-You are L.U.N.A.'s local utility brain.
-
-You are running locally through Ollama.
-You may be operating completely offline.
-
-Handle fast, simple tasks and short conversational requests.
-
-Be concise.
-Answer directly.
-Do not explain simple answers unless explanation is requested.
-Do not invent current information when operating offline.
-Do not claim to have internet access.
-""",
-            }
+                "content": request.system_prompt or "",
+            },
+            {
+                "role": "user",
+                "content": request.prompt,
+            },
         ]
 
-        if request.system_prompt:
-            messages.append({
-                "role": "system",
-                "content": request.system_prompt,
-            })
-
-        messages.append({
-            "role": "user",
-            "content": request.prompt,
-        })
+        print(
+            f"[L.U.N.A.] Ollama prompt: "
+            f"{len(request.system_prompt or '')} system chars | "
+            f"{len(request.prompt)} user chars"
+        )
 
         chunks: list[str] = []
 

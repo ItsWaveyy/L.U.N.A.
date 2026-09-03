@@ -72,8 +72,12 @@ class AIRouter:
             provider_started = time.perf_counter()
 
             try:
-                response = await provider.generate(
+                prepared_request = provider.prepare_request(
                     request
+                )
+
+                response = await provider.generate(
+                    prepared_request
                 )
 
                 provider_seconds = (
