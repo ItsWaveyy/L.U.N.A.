@@ -83,6 +83,26 @@ class ConversationStore:
                 """
             )
 
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS reminders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    message TEXT NOT NULL,
+                    remind_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    completed_at TEXT
+                )
+                """
+            )
+
+            connection.execute(
+                """
+                CREATE INDEX IF NOT EXISTS
+                idx_reminders_remind_at
+                ON reminders(remind_at)
+                """
+            )
+
             connection.commit()
 
         finally:
@@ -183,3 +203,119 @@ class ConversationStore:
             connection.close()
 
         self.session_id = None
+
+    def add_reminder(
+        self,
+        message: str,
+        remind_at: datetime,
+    ) -> int:
+        """Persist a reminder and return its database ID."""
+        message = (message or "").strip()
+
+        if not message:
+            raise ValueError(
+                "Reminder message cannot be empty."
+            )
+
+        created_at = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        connection = self._connect()
+
+        try:
+            cursor = connection.execute(
+                """
+                INSERT INTO reminders
+                (message, remind_at, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (
+                    message,
+                    remind_at.astimezone(
+                        timezone.utc
+                    ).isoformat(),
+                    created_at,
+                ),
+            )
+
+            connection.commit()
+
+            return int(cursor.lastrowid)
+
+        finally:
+            connection.close()
+
+
+    def get_due_reminders(
+        self,
+        now: datetime | None = None,
+    ) -> list[dict]:
+        """Return all reminders that are due and not completed."""
+        if now is None:
+            now = datetime.now(timezone.utc)
+
+        now_utc = now.astimezone(
+            timezone.utc
+        ).isoformat()
+
+        connection = self._connect()
+
+        try:
+            rows = connection.execute(
+                """
+                SELECT id, message, remind_at, created_at
+                FROM reminders
+                WHERE completed_at IS NULL
+                AND remind_at <= ?
+                ORDER BY remind_at ASC
+                """,
+                (now_utc,),
+            ).fetchall()
+
+            return [
+                {
+                    "id": row[0],
+                    "message": row[1],
+                    "remind_at": datetime.fromisoformat(
+                        row[2]
+                    ),
+                    "created_at": datetime.fromisoformat(
+                        row[3]
+                    ),
+                }
+                for row in rows
+            ]
+
+        finally:
+            connection.close()
+
+
+    def complete_reminder(
+        self,
+        reminder_id: int,
+    ) -> None:
+        """Mark a reminder as completed."""
+        completed_at = datetime.now(
+            timezone.utc
+        ).isoformat()
+
+        connection = self._connect()
+
+        try:
+            connection.execute(
+                """
+                UPDATE reminders
+                SET completed_at = ?
+                WHERE id = ?
+                """,
+                (
+                    completed_at,
+                    reminder_id,
+                ),
+            )
+
+            connection.commit()
+
+        finally:
+            connection.close()

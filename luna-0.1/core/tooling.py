@@ -121,6 +121,10 @@ def build_default_tool_registry() -> ToolRegistry:
         from tools.web import search_web_query
         return await search_web_query(query)
 
+    from tools.canvas import get_canvas_calendar
+
+    from tools.reminders import (create_reminder, list_active_reminders, cancel_reminder)
+    
     async def send_email(
         recipient: str,
         subject: str,
@@ -160,6 +164,58 @@ def build_default_tool_registry() -> ToolRegistry:
             ),
             handler=send_email,
             requires_network=True,
+            requires_explicit_request=True,
+        ),
+        CoreTool(
+            name="canvas_calendar",
+            description=(
+                "Read the user's Canvas calendar. Use this for questions about "
+                "classes, assignments, due dates, exams, quizzes, schedule, or "
+                "upcoming Canvas events. Summarize results naturally for the user. "
+                "Do not expose raw Canvas course IDs, section numbers, CRNs, "
+                "semester codes, teacher names, meeting times, or other internal "
+                "Canvas metadata unless the user specifically asks for those details. "
+                "For assignment questions, prioritize the assignment name, course "
+                "subject, and due date. Arguments: scope ('today', 'tomorrow', "
+                "'week', or 'upcoming'), optional query text, and optional days "
+                "for upcoming searches."
+            ),
+            handler=get_canvas_calendar,
+            requires_network=True,
+        ),
+
+        CoreTool(
+            name="create_reminder",
+            description=(
+                "Create a persistent reminder for the user. "
+                "Use this when the user explicitly asks L.U.N.A. "
+                "to remind them about something at a specific time. "
+                "Arguments: message and remind_at. "
+                "remind_at must be an ISO-8601 datetime with timezone."
+            ),
+            handler=create_reminder,
+        )
+
+        CoreTool(
+            name="list_active_reminders",
+            description=(
+                "List the user's active reminders, including reminders scheduled "
+                "for the future. Use this when the user asks what reminders they "
+                "have, what reminders are active, or what they are being reminded "
+                "about. Do not invent reminder state."
+            ),
+            handler=list_active_reminders,
+            requires_network=False,
+        ),
+        CoreTool(
+            name="cancel_reminder",
+            description=(
+                "Cancel an active reminder. Use this when the user explicitly asks "
+                "to cancel, delete, remove, or stop a reminder. Arguments: "
+                "reminder_id."
+            ),
+            handler=cancel_reminder,
+            requires_network=False,
             requires_explicit_request=True,
         ),
     ])

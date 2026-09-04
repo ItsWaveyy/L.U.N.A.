@@ -386,6 +386,47 @@ class StandbyManager:
             )
 
     # ---------------------------------------------------------
+    # REMINDER NOTIFICATIONS
+    # ---------------------------------------------------------
+
+    async def notify(self, message: str) -> None:
+        """
+        Temporarily wake L.U.N.A. to deliver an internal
+        notification, then return to standby when appropriate.
+
+        Reminder notifications bypass wake-word and speaker
+        authorization because they originate from L.U.N.A.
+        herself.
+        """
+
+        message = (message or "").strip()
+
+        if not message:
+            return
+
+        was_in_standby = self.in_standby
+
+        if was_in_standby:
+            print(
+                "[L.U.N.A.] Reminder notification: "
+                "temporarily waking..."
+            )
+
+            await self.wake()
+
+        try:
+            await self.session.say(message)
+
+        finally:
+            if was_in_standby:
+                print(
+                    "[L.U.N.A.] Reminder notification complete. "
+                    "Returning to standby..."
+                )
+
+                await self.enter_standby()
+                
+    # ---------------------------------------------------------
     # SHUTDOWN
     # ---------------------------------------------------------
 

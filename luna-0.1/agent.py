@@ -24,6 +24,7 @@ from livekit.plugins import silero
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
 from core.standby.manager import StandbyManager
+from core.reminders import ReminderScheduler
 from core.identity.audio import (
     SpeakerAudioBuffer,
     SpeakerIdentityProcessor,
@@ -318,6 +319,29 @@ async def my_agent(
         session=session,
     )
 
+    async def handle_reminder(
+        reminder: dict,
+    ) -> None:
+        message = (
+            "Yo Reece, you asked me to remind you: "
+            f"{reminder['message']}"
+        )
+
+        luna_log(
+            "Reminder fired: "
+            f"{reminder['message']}"
+        )
+
+        await standby_manager.notify(
+            message
+        )
+
+    reminder_scheduler = ReminderScheduler(
+        conversations=luna_core.conversations,
+        on_reminder=handle_reminder,
+    )
+
+
     sleep_controller = SessionSleepWakeController(
         session=session,
         luna_core=luna_core,
@@ -325,6 +349,21 @@ async def my_agent(
     )
 
     async def cleanup():
+        luna_log(
+            "Shutdown: ending conversation session..."
+        )
+
+    async def cleanup():
+        luna_log(
+            "Shutdown: stopping reminder scheduler..."
+        )
+
+        await reminder_scheduler.shutdown()
+
+        luna_log(
+            "Shutdown: reminder scheduler stopped."
+        )
+
         luna_log(
             "Shutdown: ending conversation session..."
         )
@@ -343,6 +382,12 @@ async def my_agent(
 
         luna_log(
             "Shutdown: standby manager stopped."
+        )
+
+        luna_core.conversations.end_session()
+
+        luna_log(
+            "Shutdown: conversation session ended."
         )
 
     def on_session_close(event):
@@ -379,6 +424,12 @@ async def my_agent(
                 noise_cancellation=speaker_processor,
             ),
         ),
+    )
+
+    reminder_scheduler.start()
+    
+    luna_log(
+        "Reminder scheduler: ONLINE"
     )
 
     luna_log(

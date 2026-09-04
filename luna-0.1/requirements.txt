@@ -120,3 +120,4 @@ wheel==0.48.0
 xxhash==4.0.1
 yarl==1.24.5
 zstandard==0.25.0
+icalendar==7.3.0

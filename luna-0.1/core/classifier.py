@@ -54,6 +54,19 @@ class TaskClassifier:
             "what's happening",
             "who won",
             "who is winning",
+            "calendar",
+            "schedule",
+            "assignment",
+            "assignments",
+            "homework",
+            "due",
+            "exam",
+            "exams",
+            "quiz",
+            "quizzes",
+            "class",
+            "classes",
+            "canvas",
         )
 
         for keyword in network_keywords:
@@ -188,6 +201,30 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
+        calendar_keywords = (
+            "calendar",
+            "schedule",
+            "assignment",
+            "assignments",
+            "homework",
+            "due",
+            "exam",
+            "exams",
+            "quiz",
+            "quizzes",
+            "class",
+            "classes",
+            "canvas",
+        )
+
+        if any(keyword in text for keyword in calendar_keywords):
+            return Classification(
+                task="fast",
+                confidence=0.9,
+                reason="Detected a calendar, Canvas, assignment, or academic schedule request.",
+                requires_network=requires_network,
+            )
+        
         # RESEARCH / CURRENT INFORMATION
         research_keywords = (
             "latest",
@@ -238,6 +275,19 @@ class TaskClassifier:
             "how long",
             "how far",
             "what about",
+            "calendar",
+            "schedule",
+            "assignment",
+            "assignments",
+            "homework",
+            "due",
+            "exam",
+            "exams",
+            "quiz",
+            "quizzes",
+            "class",
+            "classes",
+            "canvas",
         )
 
         if any(keyword in text for keyword in fast_keywords):

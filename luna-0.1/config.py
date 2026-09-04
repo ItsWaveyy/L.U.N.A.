@@ -53,3 +53,18 @@ LUNA_DEBUG = os.getenv(
     "yes",
     "on",
 }
+
+CANVAS_ENABLED = os.getenv(
+    "CANVAS_ENABLED",
+    "false",
+).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+
+CANVAS_CALENDAR_URL = os.getenv(
+    "CANVAS_CALENDAR_URL",
+    "",
+).strip()
