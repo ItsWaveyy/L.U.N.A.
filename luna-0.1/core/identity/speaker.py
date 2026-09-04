@@ -9,7 +9,12 @@ from pathlib import Path
 import numpy as np
 
 
-DEFAULT_MODEL = "wespeaker-resnet34"
+DEFAULT_MODEL = (
+    Path(__file__).resolve().parents[2]
+    / "models"
+    / "speaker"
+    / "voxceleb_resnet34_LM.onnx"
+)
 
 # Conservative enough for authorization, but less brittle
 # than the original 0.60 on every individual sample.
@@ -45,7 +50,7 @@ class SpeakerIdentity:
     def __init__(
         self,
         profile_path: str | os.PathLike = PROFILE_PATH,
-        model: str = DEFAULT_MODEL,
+        model: str | os.PathLike = DEFAULT_MODEL,
         threshold: float = DEFAULT_THRESHOLD,
     ):
         self.profile_path = Path(profile_path)

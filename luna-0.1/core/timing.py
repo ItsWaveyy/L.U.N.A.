@@ -6,8 +6,21 @@ from dataclasses import dataclass, field
 from typing import Iterator
 
 
-def luna_log(message: str) -> None:
+def luna_log(
+    message: str,
+    *,
+    debug: bool = False,
+) -> None:
     """Write an immediately visible L.U.N.A. log line."""
+
+    if debug:
+        from config import LUNA_DEBUG
+
+        if not LUNA_DEBUG:
+            return
+
+        message = f"[DEBUG] {message}"
+
     print(
         f"[L.U.N.A.] {message}",
         flush=True,

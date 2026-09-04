@@ -13,7 +13,10 @@ app = FastAPI(title="L.U.N.A. Kokoro TTS")
 VOICE = "af_heart"
 SAMPLE_RATE = 24000
 
-pipeline = KPipeline(lang_code="a")
+pipeline = KPipeline(
+    lang_code="a",
+    repo_id="hexgrad/Kokoro-82M",
+)
 
 
 class SpeechRequest(BaseModel):

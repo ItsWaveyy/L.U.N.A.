@@ -43,3 +43,13 @@ EMAIL_PASSWORD = os.getenv(
 
 # Database
 DATABASE_PATH = "data/luna.db"
+
+LUNA_DEBUG = os.getenv(
+    "LUNA_DEBUG",
+    "false",
+).lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}

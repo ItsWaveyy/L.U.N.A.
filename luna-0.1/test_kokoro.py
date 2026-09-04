@@ -17,7 +17,10 @@ VOICES = [
     "af_nicole",
 ]
 
-pipeline = KPipeline(lang_code="a")
+pipeline = KPipeline(
+    lang_code="a",
+    repo_id="hexgrad/Kokoro-82M",
+)
 
 for voice in VOICES:
     print(f"\nGenerating {voice}...")
