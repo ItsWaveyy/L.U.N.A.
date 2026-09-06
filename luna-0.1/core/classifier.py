@@ -201,6 +201,24 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
+        reminder_keywords = (
+            "remind me",
+            "reminder",
+            "remind me to",
+            "remind me that",
+            "set a reminder",
+            "set me a reminder",
+            "remember to remind me",
+        )
+
+        if any(keyword in text for keyword in reminder_keywords):
+            return Classification(
+                task="fast",
+                confidence=0.95,
+                reason="Detected an explicit reminder request.",
+                requires_network=False,
+            )
+
         calendar_keywords = (
             "calendar",
             "schedule",

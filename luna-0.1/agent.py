@@ -338,7 +338,7 @@ async def my_agent(
 
     reminder_scheduler = ReminderScheduler(
         conversations=luna_core.conversations,
-        on_reminder=handle_reminder,
+        on_reminder=standby_manager.notify,
     )
 
 
@@ -384,12 +384,6 @@ async def my_agent(
             "Shutdown: standby manager stopped."
         )
 
-        luna_core.conversations.end_session()
-
-        luna_log(
-            "Shutdown: conversation session ended."
-        )
-
     def on_session_close(event):
         asyncio.create_task(cleanup())
 
@@ -427,10 +421,6 @@ async def my_agent(
     )
 
     reminder_scheduler.start()
-    
-    luna_log(
-        "Reminder scheduler: ONLINE"
-    )
 
     luna_log(
         "Speaker identity processor: ONLINE"

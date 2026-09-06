@@ -311,6 +311,107 @@ class LunaCore:
 
         return self.listening
 
+    def _is_reminder_request(self, text: str) -> bool:
+        """Return True when the user explicitly asks L.U.N.A. to create a reminder."""
+
+        text = normalize(text)
+
+        reminder_keywords = (
+            "remind me",
+            "set a reminder",
+            "set me a reminder",
+            "reminder",
+            "remember to remind me",
+        )
+
+        return any(
+            keyword in text
+            for keyword in reminder_keywords
+        )
+
+    def _create_relative_reminder(
+        self,
+        prompt: str,
+    ) -> AIResponse | None:
+        """
+        Handle simple explicit relative-time reminders deterministically.
+
+        Supported examples:
+            remind me in 30 seconds that ...
+            remind me in 5 minutes to ...
+            remind me in 2 hours that ...
+        """
+
+        text = normalize(prompt)
+
+        pattern = re.compile(
+            r"""
+            \bremind\s+me
+            \s+in\s+
+            (?P<amount>\d+)
+            \s+
+            (?P<unit>second|seconds|minute|minutes|hour|hours)
+            \s+
+            (?P<message>.+?)
+            \s*[.!?]?
+            $
+            """,
+            re.IGNORECASE | re.VERBOSE,
+        )
+
+        match = pattern.search(text)
+
+        if not match:
+            return None
+
+        amount = int(match.group("amount"))
+        unit = match.group("unit").lower()
+        message = match.group("message").strip()
+
+        if not message:
+            return None
+
+        multipliers = {
+            "second": 1,
+            "seconds": 1,
+            "minute": 60,
+            "minutes": 60,
+            "hour": 3600,
+            "hours": 3600,
+        }
+
+        seconds = amount * multipliers[unit]
+
+        from datetime import datetime, timedelta
+
+        remind_at = datetime.now().astimezone() + timedelta(
+            seconds=seconds
+        )
+
+        reminder_id = self.conversations.add_reminder(
+            message=message,
+            remind_at=remind_at,
+        )
+
+        local_time = remind_at.strftime(
+            "%A, %B %-d at %-I:%M:%S %p"
+        )
+
+        return AIResponse(
+            text=(
+                f"Got it, sir. I'll remind you "
+                f"at {local_time}."
+            ),
+            provider="core",
+            model="reminder-scheduler",
+            metadata={
+                "reminder_created": True,
+                "reminder_id": reminder_id,
+                "reminder_message": message,
+                "reminder_seconds": seconds,
+            },
+        )
+
     async def warmup_providers(
         self,
         timeout: float = 3.0,
@@ -393,6 +494,27 @@ class LunaCore:
                     ),
                 },
             )
+
+        # ---------------------------------------------------------
+        # REMINDERS
+        # ---------------------------------------------------------
+
+        if self._is_reminder_request(text):
+            reminder_response = self._create_relative_reminder(
+                prompt
+            )
+
+            if reminder_response is not None:
+                reminder_response.metadata.update({
+                    "classified_task": "fast",
+                    "listening": self.listening,
+                    "classification_seconds": 0.0,
+                    "provider_generation_seconds": 0.0,
+                    "tools_used": ["create_reminder"],
+                })
+
+                return reminder_response
+
 
         # ---------------------------------------------------------
         # NORMAL REQUEST

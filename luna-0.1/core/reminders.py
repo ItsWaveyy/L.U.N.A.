@@ -1,122 +1,101 @@
-"""Reminder tools for L.U.N.A."""
+"""Persistent reminder scheduling for L.U.N.A."""
 
 from __future__ import annotations
 
-from datetime import datetime
+import asyncio
+from collections.abc import Awaitable, Callable
 
 from core.conversation import ConversationStore
 
 
-_conversations = ConversationStore()
+ReminderCallback = Callable[[dict], Awaitable[None]]
 
 
-def create_reminder(message: str, remind_at: str) -> str:
-    """Create a persistent reminder."""
+class ReminderScheduler:
+    """Background scheduler that fires due reminders."""
 
-    message = (message or "").strip()
+    def __init__(
+        self,
+        conversations: ConversationStore,
+        on_reminder: ReminderCallback,
+        poll_interval: float = 1.0,
+    ) -> None:
+        self.conversations = conversations
+        self.on_reminder = on_reminder
+        self.poll_interval = poll_interval
 
-    if not message:
-        return "I need something to remind you about."
+        self._task: asyncio.Task | None = None
+        self._stop_event = asyncio.Event()
 
-    try:
-        reminder_time = datetime.fromisoformat(remind_at)
-    except ValueError:
-        return "I couldn't understand that reminder time."
+    def start(self) -> None:
+        """Start the background reminder scheduler."""
 
-    if reminder_time.tzinfo is None:
-        return "The reminder time must include a timezone."
+        if self._task is not None:
+            return
 
-    reminder_id = _conversations.add_reminder(
-        message=message,
-        remind_at=reminder_time,
-    )
+        self._stop_event.clear()
 
-    local_time = reminder_time.astimezone().strftime(
-        "%A, %B %-d at %-I:%M %p"
-    )
-
-    return f"Reminder {reminder_id} created for {local_time}."
-
-
-def list_active_reminders() -> str:
-    """Return all active, incomplete reminders."""
-
-    # Query the database directly so future reminders are included too.
-    connection = _conversations._connect()
-
-    try:
-        rows = connection.execute(
-            """
-            SELECT id, message, remind_at
-            FROM reminders
-            WHERE completed_at IS NULL
-            ORDER BY remind_at ASC
-            """
-        ).fetchall()
-    finally:
-        connection.close()
-
-    if not rows:
-        return "You don't have any active reminders."
-
-    lines = ["Your active reminders are:"]
-
-    for reminder_id, message, remind_at in rows:
-        reminder_time = datetime.fromisoformat(remind_at).astimezone()
-        formatted_time = reminder_time.strftime(
-            "%A, %B %-d at %-I:%M %p"
+        self._task = asyncio.create_task(
+            self._run(),
+            name="luna-reminder-scheduler",
         )
 
-        lines.append(
-            f"{reminder_id}. {message} — {formatted_time}"
-        )
+        print("[L.U.N.A.] Reminder scheduler: ONLINE", flush=True)
 
-    return "\n".join(lines)
+    async def _run(self) -> None:
+        """Poll for due reminders and dispatch them."""
 
+        while not self._stop_event.is_set():
+            try:
+                reminders = self.conversations.get_due_reminders()
 
-def cancel_reminder(reminder_id: int) -> str:
-    """Cancel an active reminder."""
+                for reminder in reminders:
+                    try:
+                        print(
+                            f"[L.U.N.A.] Reminder fired: "
+                            f"{reminder['message']}",
+                            flush=True,
+                        )
 
-    try:
-        reminder_id = int(reminder_id)
-    except (TypeError, ValueError):
-        return "I need a valid reminder ID."
+                        await self.on_reminder(reminder["message"])
 
-    connection = _conversations._connect()
+                    finally:
+                        self.conversations.complete_reminder(
+                            reminder["id"]
+                        )
 
-    try:
-        row = connection.execute(
-            """
-            SELECT id, message
-            FROM reminders
-            WHERE id = ? AND completed_at IS NULL
-            """,
-            (reminder_id,),
-        ).fetchone()
+            except asyncio.CancelledError:
+                raise
 
-        if row is None:
-            return f"I couldn't find active reminder {reminder_id}."
+            except Exception as exc:
+                print(
+                    f"[L.U.N.A.] Reminder scheduler error: {exc}",
+                    flush=True,
+                )
 
-        connection.execute(
-            """
-            UPDATE reminders
-            SET completed_at = ?
-            WHERE id = ?
-            """,
-            (
-                datetime.now().astimezone().isoformat(),
-                reminder_id,
-            ),
-        )
-        connection.commit()
+            try:
+                await asyncio.wait_for(
+                    self._stop_event.wait(),
+                    timeout=self.poll_interval,
+                )
+            except asyncio.TimeoutError:
+                pass
 
-        return f"Cancelled reminder {reminder_id}: {row[1]}."
+    async def shutdown(self) -> None:
+        """Stop the background reminder scheduler."""
 
-    finally:
-        connection.close()
+        self._stop_event.set()
 
+        if self._task is None:
+            return
 
-def reminders_timezone():
-    """Return the local timezone used for reminder display."""
+        self._task.cancel()
 
-    return datetime.now().astimezone().tzinfo
+        try:
+            await self._task
+        except asyncio.CancelledError:
+            pass
+
+        self._task = None
+
+        print("[L.U.N.A.] Reminder scheduler: OFFLINE", flush=True)

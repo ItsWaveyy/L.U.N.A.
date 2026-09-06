@@ -123,7 +123,11 @@ def build_default_tool_registry() -> ToolRegistry:
 
     from tools.canvas import get_canvas_calendar
 
-    from tools.reminders import (create_reminder, list_active_reminders, cancel_reminder)
+    from tools.reminders import (
+            create_reminder,
+            list_active_reminders,
+            cancel_reminder,
+        )
     
     async def send_email(
         recipient: str,
@@ -184,7 +188,7 @@ def build_default_tool_registry() -> ToolRegistry:
             requires_network=True,
         ),
 
-        CoreTool(
+                CoreTool(
             name="create_reminder",
             description=(
                 "Create a persistent reminder for the user. "
@@ -194,28 +198,26 @@ def build_default_tool_registry() -> ToolRegistry:
                 "remind_at must be an ISO-8601 datetime with timezone."
             ),
             handler=create_reminder,
-        )
-
+        ),
         CoreTool(
             name="list_active_reminders",
             description=(
-                "List the user's active reminders, including reminders scheduled "
-                "for the future. Use this when the user asks what reminders they "
-                "have, what reminders are active, or what they are being reminded "
-                "about. Do not invent reminder state."
+                "List the user's active reminders, including reminders "
+                "scheduled for the future. Use this when the user asks "
+                "what reminders they have, what reminders are active, "
+                "or what they are being reminded about. "
+                "Do not invent reminder state."
             ),
             handler=list_active_reminders,
-            requires_network=False,
         ),
         CoreTool(
             name="cancel_reminder",
             description=(
-                "Cancel an active reminder. Use this when the user explicitly asks "
-                "to cancel, delete, remove, or stop a reminder. Arguments: "
-                "reminder_id."
+                "Cancel an active reminder. Use this when the user explicitly "
+                "asks to cancel, delete, remove, or stop a reminder. "
+                "Arguments: reminder_id."
             ),
             handler=cancel_reminder,
-            requires_network=False,
             requires_explicit_request=True,
         ),
     ])
