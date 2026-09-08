@@ -39,3 +39,8 @@ Kokoro activatation:
 Add User:
 
     python scripts/enroll_speaker.py --name {name}
+
+ssh connection
+    ssh luna@luna-core.local
+    
+thelunacore
