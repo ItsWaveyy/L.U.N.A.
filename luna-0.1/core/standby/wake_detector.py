@@ -3,7 +3,7 @@ import asyncio
 from livekit.wakeword import WakeWordListener, WakeWordModel
 
 
-MODEL_PATH = "output/hey_luna/hey_luna.onnx"
+MODEL_PATH = "models/hey_luna.onnx"
 
 
 class WakeDetector:

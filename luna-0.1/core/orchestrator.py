@@ -1,6 +1,7 @@
 import asyncio
 import re
 import time
+from pathlib import Path
 
 from core.providers import AIProvider, AIRequest, AIResponse
 from core.router import AIRouter
@@ -9,6 +10,8 @@ from core.standby.manager import StandbyManager
 from core.tooling import ToolRegistry, build_default_tool_registry, parse_tool_calls
 from core.conversation import ConversationStore
 from core.identity.speaker import SpeakerMatch
+from core.improvement.manager import ImprovementManager
+from core.improvement.pipeline import ImprovementPipeline
 
 
 CORE_SYSTEM_PROMPT = """
@@ -217,6 +220,30 @@ class LunaCore:
 
         self.conversations = ConversationStore()
         self.conversations.start_session()
+
+        # ---------------------------------------------------------
+        # SELF-IMPROVEMENT
+        # ---------------------------------------------------------
+
+        self.repository_root = (
+            Path(__file__).resolve().parent.parent
+        )
+
+        improvement_manager = ImprovementManager(
+            plans_directory=(
+                self.repository_root
+                / "data"
+                / "improvement"
+                / "plans"
+            )
+        )
+
+        self.improvement = ImprovementPipeline(
+            repository_root=str(
+                self.repository_root
+            ),
+            manager=improvement_manager,
+        )
 
         self.listening = True
         self._warmup_task = None
@@ -545,9 +572,40 @@ class LunaCore:
 
         tool_definitions = self.tools.definitions()
 
+        local_tool_request = (
+            classification is not None
+            and task == "fast"
+            and not classification.requires_network
+            and any(
+                keyword in text
+                for keyword in (
+                    "inspect yourself",
+                    "inspect self",
+                    "inspect your repository",
+                    "inspect the repository",
+                    "inspect your code",
+                    "inspect your codebase",
+                    "look at yourself",
+                    "look at your code",
+                    "review yourself",
+                    "review your code",
+                    "review your codebase",
+                    "analyze yourself",
+                    "analyze your code",
+                    "analyze your codebase",
+                    "check yourself",
+                    "check your code",
+                    "check your codebase",
+                )
+            )
+        )
+
         if (
             classification is not None
-            and classification.requires_network
+            and (
+                classification.requires_network
+                or local_tool_request
+            )
         ):
             tool_instructions = (
                 "\n\nAvailable Core tools:\n"
@@ -555,8 +613,8 @@ class LunaCore:
                 "When a tool is necessary, reply with only valid JSON in this "
                 "exact shape: {\"tool_calls\":[{\"name\":\"tool_name\","
                 "\"arguments\":{...}}]}. Do not use a tool for ordinary "
-                "conversation. Only use send_email after the user explicitly asks "
-                "to send it, and include explicit_request=true."
+                "conversation. Only use send_email after the user explicitly "
+                "asks to send it, and include explicit_request=true."
             )
         else:
             tool_instructions = (
@@ -587,7 +645,10 @@ class LunaCore:
 
         if (
             classification is not None
-            and classification.requires_network
+            and (
+                classification.requires_network
+                or local_tool_request
+            )
         ):
             local_system_prompt += (
                 "\n\nAvailable Core tools:\n"
@@ -686,6 +747,134 @@ class LunaCore:
         })
 
         return response
+
+    # -------------------------------------------------------------
+    # SELF-IMPROVEMENT API
+    # -------------------------------------------------------------
+
+    def inspect_repository(self):
+        """
+        Perform a read-only inspection of L.U.N.A.'s repository.
+
+        This operation cannot modify source code.
+        """
+
+        return self.improvement.inspect()
+
+    def create_improvement_plan(
+        self,
+        *,
+        title: str,
+        objective: str,
+        summary: str = "",
+        reasoning: str = "",
+        changes=None,
+        tests=None,
+        risks=None,
+        rollback_strategy: str = "",
+    ):
+        """
+        Create a draft self-improvement plan.
+
+        Creating a plan never approves or executes it.
+        """
+
+        return self.improvement.create_plan(
+            title=title,
+            objective=objective,
+            summary=summary,
+            reasoning=reasoning,
+            changes=changes,
+            tests=tests,
+            risks=risks,
+            rollback_strategy=rollback_strategy,
+        )
+
+    def request_improvement_approval(
+        self,
+        plan_id: str,
+    ):
+        """
+        Mark a draft improvement plan as awaiting user approval.
+        """
+
+        return self.improvement.request_approval(
+            plan_id
+        )
+
+    def approve_improvement_plan(
+        self,
+        plan_id: str,
+    ):
+        """
+        Explicitly approve an improvement plan.
+
+        Approval and execution intentionally remain separate.
+        """
+
+        return self.improvement.approve(
+            plan_id
+        )
+
+    def reject_improvement_plan(
+        self,
+        plan_id: str,
+    ):
+        """Reject an improvement plan."""
+
+        return self.improvement.reject(
+            plan_id
+        )
+
+    def execute_improvement_plan(
+        self,
+        plan_id: str,
+        *,
+        file_contents: dict[str, str],
+    ):
+        """
+        Execute an already-approved improvement plan.
+
+        The ChangeExecutor and ImprovementSafetyPolicy enforce
+        repository and path safety.
+        """
+
+        return self.improvement.execute(
+            plan_id,
+            file_contents=file_contents,
+        )
+
+    def test_improvement_plan(
+        self,
+        plan_id: str,
+        test_callback,
+    ):
+        """
+        Test an executed improvement plan using a caller-supplied
+        safe callback.
+
+        Arbitrary shell execution is not exposed here.
+        """
+
+        return self.improvement.test(
+            plan_id,
+            test_callback,
+        )
+
+    def get_improvement_plan(
+        self,
+        plan_id: str,
+    ):
+        """Retrieve a persisted improvement plan."""
+
+        return self.improvement.get_plan(
+            plan_id
+        )
+
+    def list_improvement_plans(self):
+        """Return all persisted self-improvement plans."""
+
+        return self.improvement.manager.list_plans()
 
     async def health_status(self) -> dict[str, bool]:
         """Return the health status of every registered provider."""

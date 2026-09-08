@@ -201,6 +201,37 @@ class TaskClassifier:
                 requires_network=requires_network,
             )
 
+        self_inspection_keywords = (
+            "inspect yourself",
+            "inspect self",
+            "inspect your repository",
+            "inspect the repository",
+            "inspect your code",
+            "inspect your codebase",
+            "look at yourself",
+            "look at your code",
+            "review yourself",
+            "review your code",
+            "review your codebase",
+            "analyze yourself",
+            "analyze your code",
+            "analyze your codebase",
+            "check yourself",
+            "check your code",
+            "check your codebase",
+        )
+
+        if any(
+            keyword in text
+            for keyword in self_inspection_keywords
+        ):
+            return Classification(
+                task="fast",
+                confidence=0.95,
+                reason="Detected a self-inspection request.",
+                requires_network=False,
+            )
+
         reminder_keywords = (
             "remind me",
             "reminder",

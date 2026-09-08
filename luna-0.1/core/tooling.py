@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 
-ToolHandler = Callable[..., Awaitable[str]]
+ToolHandler = Callable[..., Awaitable[str] | str]
 
 
 @dataclass(frozen=True)
@@ -51,7 +51,9 @@ class ToolRegistry:
         if offline and tool.requires_network:
             return f"Tool '{name}' requires a network connection."
 
-        if tool.requires_explicit_request and not arguments.pop(
+        execution_arguments = dict(arguments)
+
+        if tool.requires_explicit_request and not execution_arguments.pop(
             "explicit_request",
             False,
         ):
@@ -61,7 +63,7 @@ class ToolRegistry:
             )
 
         try:
-            result = tool.handler(**arguments)
+            result = tool.handler(**execution_arguments)
 
             if inspect.isawaitable(result):
                 return str(await result)
@@ -107,63 +109,116 @@ def build_default_tool_registry() -> ToolRegistry:
 
     async def remember(memory: str) -> str:
         from tools.memory import store_memory
+
         return await store_memory(memory)
 
     async def recall(query: str) -> str:
         from tools.memory import recall_memories
+
         return await recall_memories(query)
 
     async def weather(city: str, days: int = 1) -> str:
         from tools.weather import get_weather_for_city
+
         return await get_weather_for_city(city, days)
 
     async def search_web(query: str) -> str:
         from tools.web import search_web_query
+
         return await search_web_query(query)
 
     from tools.canvas import get_canvas_calendar
 
     from tools.reminders import (
-            create_reminder,
-            list_active_reminders,
-            cancel_reminder,
-        )
-    
+        create_reminder,
+        list_active_reminders,
+        cancel_reminder,
+    )
+
     async def send_email(
         recipient: str,
         subject: str,
         body: str,
     ) -> str:
         from tools.email_tool import send_email_message
-        return await send_email_message(recipient, subject, body)
+
+        return await send_email_message(
+            recipient,
+            subject,
+            body,
+        )
+
+    async def inspect_self() -> str:
+        """
+        Perform a read-only inspection of L.U.N.A.'s repository.
+
+        This tool cannot modify files, create plans, approve changes,
+        execute changes, or run repository code.
+        """
+
+        from core.improvement.inspector import (
+            RepositoryInspector,
+        )
+
+        from pathlib import Path
+
+        repository_root = (
+            Path(__file__).resolve().parent.parent
+        )
+
+        inspector = RepositoryInspector(
+            repository_root
+        )
+
+        snapshot = inspector.inspect()
+
+        return (
+            f"L.U.N.A. repository inspection complete. "
+            f"Python files: {len(snapshot.python_files)}. "
+            f"Modules: {len(snapshot.modules)}. "
+            f"Directories: {len(snapshot.directories)}."
+        )
 
     return ToolRegistry([
         CoreTool(
             name="remember",
-            description="Store a user-provided memory. Arguments: memory.",
+            description=(
+                "Store a user-provided memory. "
+                "Arguments: memory."
+            ),
             handler=remember,
         ),
         CoreTool(
             name="recall",
-            description="Search saved memories. Arguments: query.",
+            description=(
+                "Search saved memories. "
+                "Arguments: query."
+            ),
             handler=recall,
         ),
         CoreTool(
             name="weather",
-            description="Get weather or a forecast. Arguments: city, days (1-10).",
+            description=(
+                "Get weather or a forecast. "
+                "Arguments: city, days (1-10)."
+            ),
             handler=weather,
             requires_network=True,
         ),
         CoreTool(
             name="search_web",
-            description="Search the web. Arguments: query.",
+            description=(
+                "Search the web. "
+                "Arguments: query."
+            ),
             handler=search_web,
             requires_network=True,
         ),
         CoreTool(
             name="send_email",
             description=(
-                "Send an email. Arguments: recipient, subject, body, "
+                "Send an email. "
+                "Arguments: recipient, subject, body, "
                 "explicit_request=true."
             ),
             handler=send_email,
@@ -173,22 +228,21 @@ def build_default_tool_registry() -> ToolRegistry:
         CoreTool(
             name="canvas_calendar",
             description=(
-                "Read the user's Canvas calendar. Use this for questions about "
-                "classes, assignments, due dates, exams, quizzes, schedule, or "
-                "upcoming Canvas events. Summarize results naturally for the user. "
-                "Do not expose raw Canvas course IDs, section numbers, CRNs, "
-                "semester codes, teacher names, meeting times, or other internal "
-                "Canvas metadata unless the user specifically asks for those details. "
-                "For assignment questions, prioritize the assignment name, course "
-                "subject, and due date. Arguments: scope ('today', 'tomorrow', "
-                "'week', or 'upcoming'), optional query text, and optional days "
-                "for upcoming searches."
+                "Read the user's Canvas calendar. Use this for questions "
+                "about classes, assignments, due dates, exams, quizzes, "
+                "schedule, or upcoming Canvas events. Summarize results "
+                "naturally for the user. Do not expose raw Canvas course IDs, "
+                "section numbers, CRNs, semester codes, teacher names, meeting "
+                "times, or other internal Canvas metadata unless the user "
+                "specifically asks for those details. For assignment questions, "
+                "prioritize the assignment name, course subject, and due date. "
+                "Arguments: scope ('today', 'tomorrow', 'week', or 'upcoming'), "
+                "optional query text, and optional days for upcoming searches."
             ),
             handler=get_canvas_calendar,
             requires_network=True,
         ),
-
-                CoreTool(
+        CoreTool(
             name="create_reminder",
             description=(
                 "Create a persistent reminder for the user. "
@@ -219,5 +273,15 @@ def build_default_tool_registry() -> ToolRegistry:
             ),
             handler=cancel_reminder,
             requires_explicit_request=True,
+        ),
+        CoreTool(
+            name="inspect_self",
+            description=(
+                "Perform a read-only inspection of L.U.N.A.'s own repository. "
+                "Use this when the user explicitly asks L.U.N.A. to inspect "
+                "itself, review its structure, or analyze its current codebase. "
+                "This tool cannot modify files or execute changes."
+            ),
+            handler=inspect_self,
         ),
     ])
