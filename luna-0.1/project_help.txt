@@ -1,0 +1,41 @@
+1. make sure you're in:
+    /Users/reece/L.U.N.A./luna-0.1
+
+2. Then deactivate:
+
+    deactivate
+
+3. Delete only the venv:
+
+    rm -rf venv
+
+4. Then create a completely fresh one:
+
+    python3.13 -m venv venv
+
+5. Activate:
+
+    source luna-0.1/venv/bin/activate
+
+6. Upgrade the basic packaging tools:
+
+    python -m pip install --upgrade pip setuptools wheel
+
+7. Then reinstall your requirements:
+
+    python -m pip install --trusted-host pypi.org --trusted-host files.pythonhosted.org -r requirements.txt
+
+
+Kokoro activatation:
+
+    source kokoro-venv/bin/activate
+
+    cd luna-0.1
+
+    ../kokoro-venv/bin/python -m uvicorn services.kokoro.server:app --host 127.0.0.1 --port 8880
+
+    lsof -nP -iTCP:8880 -sTCP:LISTEN
+
+Add User:
+
+    python scripts/enroll_speaker.py --name {name}

@@ -1,0 +1,81 @@
+import io
+
+import numpy as np
+import soundfile as sf
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
+from pydantic import BaseModel
+from kokoro import KPipeline
+
+
+app = FastAPI(title="L.U.N.A. Kokoro TTS")
+
+VOICE = "af_heart"
+SAMPLE_RATE = 24000
+
+pipeline = KPipeline(
+    lang_code="a",
+    repo_id="hexgrad/Kokoro-82M",
+)
+
+
+class SpeechRequest(BaseModel):
+    text: str
+    voice: str = VOICE
+
+
+@app.get("/health")
+async def health():
+    return {
+        "status": "ok",
+        "voice": VOICE,
+        "sample_rate": SAMPLE_RATE,
+    }
+
+
+@app.post("/speak")
+async def speak(request: SpeechRequest):
+    text = request.text.strip()
+
+    if not text:
+        raise HTTPException(
+            status_code=400,
+            detail="Text cannot be empty.",
+        )
+
+    voice = request.voice or VOICE
+
+    audio_chunks = []
+
+    generator = pipeline(text, voice=voice)
+
+    for _, _, audio in generator:
+        audio = np.asarray(audio, dtype=np.float32)
+        audio_chunks.append(audio)
+
+    if not audio_chunks:
+        raise HTTPException(
+            status_code=500,
+            detail="Kokoro generated no audio.",
+        )
+
+    audio = np.concatenate(audio_chunks)
+
+    buffer = io.BytesIO()
+
+    sf.write(
+        buffer,
+        audio,
+        SAMPLE_RATE,
+        format="WAV",
+        subtype="PCM_16",
+    )
+
+    return Response(
+        content=buffer.getvalue(),
+        media_type="audio/wav",
+        headers={
+            "X-Luna-TTS-Voice": voice,
+            "X-Luna-TTS-Sample-Rate": str(SAMPLE_RATE),
+        },
+    )
