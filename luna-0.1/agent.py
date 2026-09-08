@@ -23,6 +23,7 @@ from livekit.plugins import ai_coustics, groq
 from livekit.plugins import silero
 
 from core.orchestrator import LunaCore, SessionSleepWakeController
+from services.core_api.server import create_core_api
 from core.standby.manager import StandbyManager
 from core.reminders import ReminderScheduler
 from core.identity.audio import (
@@ -259,6 +260,7 @@ class Assistant(Agent):
             raise StopResponse()
 
 server = AgentServer()
+core_api = none
 
 
 @server.rtc_session(
@@ -313,6 +315,7 @@ async def my_agent(
     )
 
     luna_core = LunaCore()
+    core_api.state.set_core(luna_core)
 
     standby_manager = StandbyManager(
         luna_core=luna_core,
