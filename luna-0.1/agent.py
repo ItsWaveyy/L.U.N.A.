@@ -19,7 +19,8 @@ from livekit.agents import (
 from livekit.plugins import ai_coustics, groq
 from livekit.plugins import silero
 
-from core.orchestrator import LunaCore, SessionSleepWakeController
+from core.orchestrator import SessionSleepWakeController
+from core.client import CoreClient
 from core.standby.manager import StandbyManager
 from core.identity.audio import (
     SpeakerAudioBuffer,
@@ -59,7 +60,11 @@ class PlaceholderLLM(llm.LLM):
 
         Assistant.llm_node()
             ↓
-        LunaCore.ask()
+        CoreClient.ask()
+            ↓
+        L.U.N.A. Core API
+            ↓
+        LunaCore
             ↓
         Router
             ↓
@@ -90,13 +95,13 @@ class Assistant(Agent):
     This class does not own L.U.N.A.'s persistent runtime.
 
     It translates LiveKit conversation events into calls
-    to the Core instance associated with this access point.
+    to the persistent L.U.N.A. Core through CoreClient.
     """
 
     def __init__(
         self,
         sleep_controller: SessionSleepWakeController,
-        luna_core: LunaCore,
+        luna_core: CoreClient,
     ) -> None:
 
         self.sleep_controller = sleep_controller
@@ -162,7 +167,7 @@ class Assistant(Agent):
         model_settings,
     ) -> AsyncGenerator[str, None]:
         """
-        Route LiveKit responses through LunaCore.
+        Route LiveKit responses through the persistent Core API.
         """
 
         prompt = self._latest_user_message(
@@ -243,7 +248,7 @@ class Assistant(Agent):
 
         if response.text:
 
-            self.luna_core.record_assistant_message(
+            await self.luna_core.record_assistant_message(
                 response.text
             )
 
@@ -281,7 +286,7 @@ class Assistant(Agent):
         if not transcript:
             raise StopResponse()
 
-        self.luna_core.record_user_message(
+        await self.luna_core.record_user_message(
             transcript
         )
 
@@ -364,18 +369,16 @@ async def my_agent(
     )
 
     # --------------------------------------------------------
-    # TEMPORARY ACCESS-POINT CORE
+    # PERSISTENT CORE ACCESS
+    # --------------------------------------------------------
     #
-    # IMPORTANT:
-    # This is intentionally still local to the LiveKit job.
+    # The LiveKit agent does NOT create or own LunaCore.
     #
-    # The next architectural step is replacing this with
-    # the persistent Core runtime/API.
+    # CoreClient communicates with the persistent
+    # LunaCoreRuntime through the Core API.
     # --------------------------------------------------------
 
-    luna_core = LunaCore()
-
-    luna_core.conversations.start_session()
+    luna_core = CoreClient()
 
     # --------------------------------------------------------
     # LIVEKIT ACCESS-POINT SERVICES
@@ -406,11 +409,16 @@ async def my_agent(
         ai_coustics.audio_enhancement()
     )
 
+    def on_speaker_identified(match):
+        asyncio.create_task(
+            luna_core.set_speaker(match)
+        )
+
     speaker_processor = SpeakerIdentityProcessor(
         buffer=speaker_buffer,
         speaker_identity=speaker_identity,
         downstream=ai_coustics_processor,
-        on_identified=luna_core.set_speaker,
+        on_identified=on_speaker_identified,
     )
 
     # --------------------------------------------------------
@@ -418,18 +426,6 @@ async def my_agent(
     # --------------------------------------------------------
 
     async def cleanup():
-
-        luna_log(
-            "LiveKit session shutdown: "
-            "ending conversation session..."
-        )
-
-        luna_core.conversations.end_session()
-
-        luna_log(
-            "LiveKit session shutdown: "
-            "conversation session ended."
-        )
 
         luna_log(
             "LiveKit session shutdown: "
@@ -441,6 +437,11 @@ async def my_agent(
         luna_log(
             "LiveKit session shutdown: "
             "standby manager stopped."
+        )
+
+        luna_log(
+            "LiveKit session shutdown: "
+            "Core remains online."
         )
 
     def on_session_close(event):
@@ -471,6 +472,8 @@ async def my_agent(
             ),
         ),
     )
+
+    session.input.set_audio_enabled(False)
 
     luna_log(
         "Speaker identity processor: ONLINE"
@@ -530,6 +533,8 @@ async def my_agent(
         await session.say(
             startup_response.text
         )
+
+    session.input.set_audio_enabled(True)
 
     log_turn_timing(
         startup_timing

@@ -42,6 +42,9 @@
                     </select>
 
                     <button id="apply-layout">APPLY</button>
+                    <button id="auto-mode">
+                        AUTO
+                    </button>
                 </div>
 
                 <div class="control-row">
@@ -70,6 +73,35 @@
                 <span id="connection-text">CONNECTING</span>
             </div>
         </header>
+
+        <section id="assistant-panel" class="panel assistant-panel">
+            <div class="panel-header">
+                <h2>L.U.N.A.</h2>
+                <span id="assistant-status">READY</span>
+            </div>
+
+            <div id="assistant-messages" class="assistant-messages">
+                <div class="assistant-message system-message">
+                    <div class="assistant-role">L.U.N.A.</div>
+                    <div class="assistant-text">
+                        Core interface ready.
+                    </div>
+                </div>
+            </div>
+
+            <form id="assistant-form" class="assistant-input-row">
+                <input
+                    id="assistant-input"
+                    type="text"
+                    autocomplete="off"
+                    placeholder="Ask L.U.N.A..."
+                >
+
+                <button type="submit">
+                    SEND
+                </button>
+            </form>
+        </section>
 
         <section id="alerts-panel" class="alerts panel">
             <div class="panel-header">

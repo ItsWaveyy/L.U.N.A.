@@ -839,3 +839,118 @@ body[data-dashboard-mode="alert"] #wakeword-panel {
         transform: none;
     }
 }
+
+/* Network panel sizing */
+#network-panel {
+    grid-column: span 6;
+}
+
+#network-panel .info-grid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* =========================================================
+   L.U.N.A. ASSISTANT INTERFACE
+   ========================================================= */
+
+.assistant-panel {
+    grid-column: 1 / -1;
+}
+
+.assistant-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    min-height: 180px;
+    max-height: 360px;
+
+    overflow-y: auto;
+
+    padding: 14px;
+
+    background: #090b0f;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+}
+
+.assistant-message {
+    padding: 10px 12px;
+    border-radius: 8px;
+    max-width: 85%;
+}
+
+.system-message,
+.luna-message {
+    align-self: flex-start;
+}
+
+.user-message {
+    align-self: flex-end;
+}
+
+.error-message {
+    align-self: flex-start;
+}
+
+.assistant-role {
+    margin-bottom: 4px;
+
+    color: var(--muted);
+
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+}
+
+.assistant-text {
+    color: var(--text);
+
+    font-size: 14px;
+    line-height: 1.5;
+
+    white-space: pre-wrap;
+}
+
+.assistant-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.assistant-input-row input {
+    flex: 1;
+
+    min-width: 0;
+
+    padding: 12px 14px;
+
+    background: #090b0f;
+    color: var(--text);
+
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+
+    outline: none;
+}
+
+.assistant-input-row input:focus {
+    border-color: var(--accent);
+}
+
+.assistant-input-row button {
+    padding: 12px 18px;
+
+    background: #15191f;
+    color: var(--text);
+
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+
+    cursor: pointer;
+}
+
+.assistant-input-row button:hover {
+    border-color: var(--accent);
+}

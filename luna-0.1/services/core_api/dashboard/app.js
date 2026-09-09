@@ -104,6 +104,164 @@ async function clearFocus() {
     }
 }
 
+async function askLuna(prompt) {
+    const response = await fetch(
+        "/api/ask",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                prompt,
+            }),
+        }
+    );
+
+    if (!response.ok) {
+        let detail = "L.U.N.A. request failed.";
+
+        try {
+            const payload = await response.json();
+
+            if (payload?.detail) {
+                detail = payload.detail;
+            }
+        } catch {
+            // Keep default error.
+        }
+
+        throw new Error(detail);
+    }
+
+    return response.json();
+}
+
+function addAssistantMessage(
+    role,
+    text,
+    className
+) {
+    const container = byId(
+        "assistant-messages"
+    );
+
+    if (!container) {
+        return;
+    }
+
+    const message = document.createElement("div");
+
+    message.className =
+        `assistant-message ${className}`;
+
+    const roleElement =
+        document.createElement("div");
+
+    roleElement.className =
+        "assistant-role";
+
+    roleElement.textContent =
+        role.toUpperCase();
+
+    const textElement =
+        document.createElement("div");
+
+    textElement.className =
+        "assistant-text";
+
+    textElement.textContent = text;
+
+    message.appendChild(roleElement);
+    message.appendChild(textElement);
+
+    container.appendChild(message);
+
+    container.scrollTop =
+        container.scrollHeight;
+}
+
+async function handleAssistantSubmit(event) {
+    event.preventDefault();
+
+    const input = byId(
+        "assistant-input"
+    );
+
+    if (!input) {
+        return;
+    }
+
+    const prompt = input.value.trim();
+
+    if (!prompt) {
+        return;
+    }
+
+    input.value = "";
+
+    addAssistantMessage(
+        "You",
+        prompt,
+        "user-message"
+    );
+
+    setText(
+        "assistant-status",
+        "THINKING"
+    );
+
+    try {
+        const response =
+            await askLuna(prompt);
+
+        addAssistantMessage(
+            "L.U.N.A.",
+            response.text || "No response.",
+            "luna-message"
+        );
+
+        setText(
+            "assistant-status",
+            response.provider
+                ? response.provider.toUpperCase()
+                : "READY"
+        );
+
+    } catch (error) {
+        console.error(error);
+
+        addAssistantMessage(
+            "L.U.N.A.",
+            error.message,
+            "error-message"
+        );
+
+        setText(
+            "assistant-status",
+            "ERROR"
+        );
+    }
+}
+
+async function enableAutoMode() {
+    try {
+        const state =
+            await sendDashboardCommand({
+                action: "set_auto_mode",
+                enabled: true,
+            });
+
+        latestDashboardState = state;
+
+        applyDashboardState(state);
+        updateDashboardControls(state);
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 function updateDashboardControls(state) {
     if (!state) {
         return;
@@ -111,7 +269,9 @@ function updateDashboardControls(state) {
 
     setText(
         "dashboard-mode",
-        state.mode?.toUpperCase() ?? "DEFAULT"
+        state.automatic
+            ? `AUTO • ${state.mode?.toUpperCase() ?? "DEFAULT"}`
+            : state.mode?.toUpperCase() ?? "DEFAULT"
     );
 
     const layoutSelect = byId("layout-select");
@@ -597,6 +757,16 @@ byId("focus-panel")?.addEventListener(
 byId("clear-focus")?.addEventListener(
     "click",
     clearFocus
+);
+
+byId("assistant-form")?.addEventListener(
+    "submit",
+    handleAssistantSubmit
+);
+
+byId("auto-mode")?.addEventListener(
+    "click",
+    enableAutoMode
 );
 
 loadTelemetry();

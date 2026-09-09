@@ -66,6 +66,7 @@ class DashboardStateManager:
     def __init__(self) -> None:
         self._lock = Lock()
         self.mode = "default"
+        self.automatic = True
         self.focused_panel: str | None = None
         self.last_updated = self._timestamp()
 
@@ -90,6 +91,7 @@ class DashboardStateManager:
                     asdict(alert)
                     for alert in self.alerts
                 ],
+                "automatic": self.automatic,
             }
 
     def apply_command(
@@ -129,6 +131,9 @@ class DashboardStateManager:
         elif action == "clear_alert":
             self._clear_alert(command)
 
+        elif action == "set_auto_mode":
+            self._set_auto_mode(command)
+
         else:
             raise ValueError(f"Unknown dashboard action: {action}")
 
@@ -165,6 +170,8 @@ class DashboardStateManager:
 
         with self._lock:
             self.mode = layout
+
+            self.automatic = False
 
             for panel_id, panel in self.panels.items():
                 panel.visible = panel_id in requested_panels
@@ -304,6 +311,24 @@ class DashboardStateManager:
         self.clear_alert(
             message=message or None,
         )
+
+    def _set_auto_mode(
+        self,
+        command: dict[str, Any],
+    ) -> None:
+        enabled = command.get(
+            "enabled",
+            True,
+        )
+
+        if not isinstance(enabled, bool):
+            raise ValueError(
+                "set_auto_mode requires a boolean enabled value."
+            )
+
+        with self._lock:
+            self.automatic = enabled
+            self._touch()
 
 
     def _require_panel(self, command: dict[str, Any]) -> str:

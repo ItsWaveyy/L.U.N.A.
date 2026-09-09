@@ -8,6 +8,7 @@ from core.system.monitor import SystemMonitor
 from core.dashboard.state import DashboardStateManager
 from core.dashboard.activity import ActivityManager
 from core.dashboard.runtime_state import CoreRuntimeState
+from core.dashboard.voice_state import VoiceRuntimeState
 
 
 class DashboardTelemetry:
@@ -26,12 +27,14 @@ class DashboardTelemetry:
         dashboard: DashboardStateManager,
         activity: ActivityManager,
         runtime_state: CoreRuntimeState,
+        voice_state: VoiceRuntimeState
     ) -> None:
         self.core = core
         self.system_monitor = system_monitor
         self.dashboard = dashboard
         self.activity = activity
         self.runtime_state = runtime_state
+        self.voice_state = voice_state
 
     async def snapshot(self) -> dict[str, Any]:
         system = self.system_monitor.as_dict()
@@ -49,6 +52,8 @@ class DashboardTelemetry:
             "runtime_state": self.runtime_state.snapshot(),
 
             "dashboard": self.dashboard.snapshot(),
+
+            "voice": self.voice_state.snapshot(),
         }
 
     async def _core_status(self) -> dict[str, Any]:

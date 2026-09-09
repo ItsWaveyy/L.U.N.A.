@@ -240,7 +240,7 @@ class StandbyManager:
             "[L.U.N.A.] Entering standby..."
         )
 
-        self.luna_core.set_listening(False)
+        await self.luna_core.set_listening(False)
 
         self._disable_livekit_audio()
 
@@ -334,7 +334,7 @@ class StandbyManager:
 
         self._enable_livekit_audio()
 
-        self.luna_core.set_listening(True)
+        await self.luna_core.set_listening(True)
 
         print(
             "[L.U.N.A.] Wake authorized."
@@ -375,7 +375,7 @@ class StandbyManager:
 
         # Make sure the wake detector remains active.
         if not self.in_standby:
-            self.luna_core.set_listening(False)
+            await self.luna_core.set_listening(False)
 
         if not self._wake_detector_active:
             self._stop_event.clear()

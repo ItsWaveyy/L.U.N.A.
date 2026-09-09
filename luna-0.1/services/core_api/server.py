@@ -16,6 +16,18 @@ class AskRequest(BaseModel):
     task: str | None = None
     system_prompt: str | None = None
 
+class ConversationMessageRequest(BaseModel):
+    role: str
+    content: str
+
+
+class ListeningRequest(BaseModel):
+    listening: bool
+
+
+class SpeakerRequest(BaseModel):
+    speaker: dict[str, Any] | None = None
+
 
 def create_core_api(runtime=None) -> FastAPI:
     """
@@ -215,5 +227,101 @@ def create_core_api(runtime=None) -> FastAPI:
             ) from exc
 
         return runtime.dashboard.snapshot()
+
+    @app.post("/api/conversation/message")
+    async def conversation_message(
+        request: ConversationMessageRequest,
+    ) -> dict[str, Any]:
+        runtime = get_runtime()
+
+        role = request.role.strip().lower()
+        content = request.content.strip()
+
+        if role not in {"user", "assistant"}:
+            raise HTTPException(
+                status_code=400,
+                detail="Conversation role must be user or assistant.",
+            )
+
+        if not content:
+            raise HTTPException(
+                status_code=400,
+                detail="Conversation message cannot be empty.",
+            )
+
+        if role == "user":
+            runtime.core.record_user_message(content)
+        else:
+            runtime.core.record_assistant_message(content)
+
+        return {
+            "status": "recorded",
+            "role": role,
+        }
+
+
+    @app.post("/api/listening")
+    async def set_listening(
+        request: ListeningRequest,
+    ) -> dict[str, Any]:
+        runtime = get_runtime()
+
+        runtime.core.set_listening(
+            request.listening
+        )
+
+        return {
+            "listening": runtime.core.listening,
+        }
+
+
+    @app.post("/api/speaker")
+    async def set_speaker(
+        request: SpeakerRequest,
+    ) -> dict[str, Any]:
+        runtime = get_runtime()
+
+        speaker = request.speaker
+
+        if speaker is None:
+            runtime.core.set_speaker(None)
+
+            return {
+                "status": "updated",
+                "speaker": None,
+            }
+
+        from core.identity.speaker import SpeakerMatch
+
+        name = speaker.get("name")
+        confidence = speaker.get("confidence")
+
+        if confidence is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Speaker confidence is required.",
+            )
+
+        authorized = speaker.get("authorized", False)
+        reason = speaker.get("reason", "")
+
+        match = SpeakerMatch(
+            name=name,
+            confidence=float(confidence),
+            authorized=bool(authorized),
+            reason=str(reason),
+        )
+
+        runtime.core.set_speaker(match)
+
+        return {
+            "status": "updated",
+            "speaker": {
+                "name": match.name,
+                "confidence": match.confidence,
+                "authorized": match.authorized,
+                "reason": match.reason,
+            },
+        }
 
     return app
