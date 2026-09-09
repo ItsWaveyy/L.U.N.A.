@@ -11,13 +11,59 @@
 </head>
 
 <body>
-    <main class="dashboard">
+    <main id="dashboard" class="dashboard">
 
         <header class="topbar">
             <div>
                 <div class="brand">L.U.N.A.</div>
                 <div class="subtitle">CORE COMMAND CENTER</div>
             </div>
+
+            <section id="control-panel" class="panel dashboard-controls">
+                <div class="panel-header">
+                    <h2>DASHBOARD CONTROL</h2>
+                    <span id="dashboard-mode">DEFAULT</span>
+                </div>
+
+                <div class="control-row">
+                    <label for="layout-select">LAYOUT</label>
+
+                    <select id="layout-select">
+                        <option value="default">Default</option>
+                        <option value="monitoring">Monitoring</option>
+                        <option value="diagnostics">Diagnostics</option>
+                        <option value="inference">Inference</option>
+                        <option value="improvement">Improvement</option>
+                        <option value="network">Network</option>
+                        <option value="memory">Memory</option>
+                        <option value="security">Security</option>
+                        <option value="idle">Idle</option>
+                        <option value="alert">Alert</option>
+                    </select>
+
+                    <button id="apply-layout">APPLY</button>
+                </div>
+
+                <div class="control-row">
+                    <label for="panel-select">PANEL</label>
+
+                    <select id="panel-select">
+                        <option value="system">System</option>
+                        <option value="providers">Providers</option>
+                        <option value="routing">Routing</option>
+                        <option value="memory">Memory</option>
+                        <option value="activity">Activity</option>
+                        <option value="network">Network</option>
+                        <option value="improvement">Improvement</option>
+                        <option value="wakeword">Voice / Wake</option>
+                    </select>
+
+                    <button id="show-panel">SHOW</button>
+                    <button id="hide-panel">HIDE</button>
+                    <button id="focus-panel">FOCUS</button>
+                    <button id="clear-focus">CLEAR FOCUS</button>
+                </div>
+            </section>
 
             <div class="connection">
                 <span id="connection-dot" class="status-dot"></span>
@@ -69,6 +115,25 @@
                 <div class="metric">
                     <span>UPTIME</span>
                     <strong id="uptime">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="network-panel" class="panel">
+            <div class="panel-header">
+                <h2>NETWORK</h2>
+                <span id="network-state">—</span>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>INTERFACE</span>
+                    <strong id="network-interface">—</strong>
+                </div>
+
+                <div>
+                    <span>STATUS</span>
+                    <strong id="network-status">—</strong>
                 </div>
             </div>
         </section>

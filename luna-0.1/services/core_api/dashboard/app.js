@@ -1,5 +1,158 @@
 const REFRESH_INTERVAL = 2000;
 
+let latestDashboardState = null;
+
+async function sendDashboardCommand(command) {
+    const response = await fetch(
+        "/api/dashboard/command",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(command),
+        }
+    );
+
+    if (!response.ok) {
+        let detail = "Dashboard command failed.";
+
+        try {
+            const payload = await response.json();
+
+            if (payload?.detail) {
+                detail = payload.detail;
+            }
+        } catch {
+            // Keep default error message.
+        }
+
+        throw new Error(detail);
+    }
+
+    return response.json();
+}
+
+async function applyLayout() {
+    const layout = byId("layout-select")?.value;
+
+    if (!layout) {
+        return;
+    }
+
+    const panels = [
+        "system",
+        "providers",
+        "routing",
+        "memory",
+        "activity",
+        "network",
+        "improvement",
+        "wakeword",
+    ];
+
+    try {
+        const state = await sendDashboardCommand({
+            action: "set_dashboard",
+            layout,
+            panels,
+        });
+
+        latestDashboardState = state;
+        applyDashboardState(state);
+        updateDashboardControls(state);
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function focusPanel() {
+    const panel = byId("panel-select")?.value;
+
+    if (!panel) {
+        return;
+    }
+
+    try {
+        const state = await sendDashboardCommand({
+            action: "focus_panel",
+            panel,
+        });
+
+        latestDashboardState = state;
+        applyDashboardState(state);
+        updateDashboardControls(state);
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+async function clearFocus() {
+    try {
+        const state = await sendDashboardCommand({
+            action: "clear_focus",
+        });
+
+        latestDashboardState = state;
+        applyDashboardState(state);
+        updateDashboardControls(state);
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
+function updateDashboardControls(state) {
+    if (!state) {
+        return;
+    }
+
+    setText(
+        "dashboard-mode",
+        state.mode?.toUpperCase() ?? "DEFAULT"
+    );
+
+    const layoutSelect = byId("layout-select");
+
+    if (layoutSelect && state.mode) {
+        layoutSelect.value = state.mode;
+    }
+
+    const focused = state.focused_panel;
+
+    const panelSelect = byId("panel-select");
+
+    if (panelSelect && focused) {
+        panelSelect.value = focused;
+    }
+}
+
+async function setPanelVisibility(visible) {
+    const panel = byId("panel-select")?.value;
+
+    if (!panel) {
+        return;
+    }
+
+    try {
+        const state = await sendDashboardCommand({
+            action: visible
+                ? "show_panel"
+                : "hide_panel",
+            panel,
+        });
+
+        latestDashboardState = state;
+        applyDashboardState(state);
+        updateDashboardControls(state);
+
+    } catch (error) {
+        console.error(error);
+    }
+}
+
 function byId(id) {
     return document.getElementById(id);
 }
@@ -108,6 +261,27 @@ function renderSystem(system) {
     setText(
         "uptime",
         formatUptime(system.uptime_seconds)
+    );
+
+    setText(
+        "network-state",
+        system.network?.interface_online
+            ? "ONLINE"
+            : "OFFLINE"
+    );
+
+    setText(
+        "network-interface",
+        system.network?.interface_online
+            ? "PRIMARY"
+            : "UNAVAILABLE"
+    );
+
+    setText(
+        "network-status",
+        system.network?.interface_online
+            ? "CONNECTED"
+            : "DISCONNECTED"
     );
 }
 
@@ -324,6 +498,8 @@ function applyDashboardState(state) {
         return;
     }
 
+    latestDashboardState = state;
+
     const panels = state.panels ?? {};
 
     for (const [panelId, panel] of Object.entries(panels)) {
@@ -337,26 +513,22 @@ function applyDashboardState(state) {
             "hidden",
             panel.visible === false
         );
-    }
 
-    if (state.focused_panel) {
-        for (const [panelId] of Object.entries(panels)) {
-            const element = byId(`${panelId}-panel`);
+        element.classList.toggle(
+            "focused",
+            panelId === state.focused_panel
+        );
 
-            if (!element) {
-                continue;
-            }
-
-            element.classList.toggle(
-                "focused",
-                panelId === state.focused_panel
-            );
-        }
+        element.dataset.priority = String(
+            panel.priority ?? 0
+        );
     }
 
     if (state.mode) {
         document.body.dataset.dashboardMode = state.mode;
     }
+
+    updateDashboardControls(state);
 }
 
 async function loadTelemetry() {
@@ -385,12 +557,6 @@ async function loadTelemetry() {
         renderActivity(telemetry.activity);
         renderAlerts(telemetry.dashboard?.alerts);
 
-        setText(
-            "wakeword-status",
-            telemetry.dashboard?.panels?.wakeword?.visible
-                ? "AVAILABLE"
-                : "HIDDEN"
-        );
 
         applyDashboardState(telemetry.dashboard);
 
@@ -407,6 +573,31 @@ async function loadTelemetry() {
         setText("connection-text", "CORE OFFLINE");
     }
 }
+
+byId("apply-layout")?.addEventListener(
+    "click",
+    applyLayout
+);
+
+byId("show-panel")?.addEventListener(
+    "click",
+    () => setPanelVisibility(true)
+);
+
+byId("hide-panel")?.addEventListener(
+    "click",
+    () => setPanelVisibility(false)
+);
+
+byId("focus-panel")?.addEventListener(
+    "click",
+    focusPanel
+);
+
+byId("clear-focus")?.addEventListener(
+    "click",
+    clearFocus
+);
 
 loadTelemetry();
 
