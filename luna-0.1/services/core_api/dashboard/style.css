@@ -1,0 +1,270 @@
+:root {
+    --background: #08090c;
+    --panel: #111318;
+    --panel-border: #242831;
+    --text: #f1f3f5;
+    --muted: #858b96;
+    --accent: #d9ff4f;
+    --good: #63e6be;
+    --warning: #ffd166;
+    --critical: #ff6b6b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "Segoe UI",
+        sans-serif;
+}
+
+.dashboard {
+    width: min(1500px, 94vw);
+    margin: 0 auto;
+    padding: 28px 0 50px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.brand {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.subtitle {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    margin-top: 4px;
+}
+
+.connection {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--warning);
+}
+
+.status-dot.online {
+    background: var(--good);
+}
+
+.status-dot.offline {
+    background: var(--critical);
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+}
+
+.panel-header span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.metric-grid,
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.metric,
+.info-grid > div {
+    background: #0b0d11;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.metric span,
+.info-grid span {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    margin-bottom: 7px;
+}
+
+.metric strong,
+.info-grid strong {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.provider-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.provider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0b0d11;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.provider-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--critical);
+    flex-shrink: 0;
+}
+
+.provider-dot.healthy {
+    background: var(--good);
+}
+
+.provider-name {
+    font-weight: 600;
+}
+
+.provider-model {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.activity-list,
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-item,
+.alert {
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    background: #0b0d11;
+}
+
+.activity-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.activity-message {
+    font-size: 13px;
+}
+
+.activity-meta {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 5px;
+}
+
+.alert {
+    border-left: 3px solid var(--good);
+}
+
+.alert.warning {
+    border-left-color: var(--warning);
+}
+
+.alert.critical {
+    border-left-color: var(--critical);
+}
+
+.alert.info {
+    border-left-color: var(--good);
+}
+
+.alert-message {
+    font-size: 13px;
+}
+
+.alert-time {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 4px;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 12px 4px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (min-width: 900px) {
+    #system-panel,
+    #core-panel {
+        width: calc(50% - 8px);
+        display: inline-block;
+        vertical-align: top;
+    }
+
+    #system-panel {
+        margin-right: 12px;
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard {
+        width: 92vw;
+        padding-top: 18px;
+    }
+
+    .brand {
+        font-size: 27px;
+    }
+
+    .topbar {
+        align-items: flex-start;
+    }
+}

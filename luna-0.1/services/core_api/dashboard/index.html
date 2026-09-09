@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+    <title>L.U.N.A. Core</title>
+    <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+
+<body>
+    <main class="dashboard">
+
+        <header class="topbar">
+            <div>
+                <div class="brand">L.U.N.A.</div>
+                <div class="subtitle">CORE COMMAND CENTER</div>
+            </div>
+
+            <div class="connection">
+                <span id="connection-dot" class="status-dot"></span>
+                <span id="connection-text">CONNECTING</span>
+            </div>
+        </header>
+
+        <section id="alerts-panel" class="alerts panel">
+            <div class="panel-header">
+                <h2>ALERTS</h2>
+                <span id="alert-count">0</span>
+            </div>
+
+            <div id="alerts-list" class="alerts-list"></div>
+        </section>
+
+        <section id="system-panel" class="panel">
+            <div class="panel-header">
+                <h2>SYSTEM</h2>
+                <span id="hostname">—</span>
+            </div>
+
+            <div class="metric-grid">
+                <div class="metric">
+                    <span>CPU</span>
+                    <strong id="cpu">—</strong>
+                </div>
+
+                <div class="metric">
+                    <span>RAM</span>
+                    <strong id="ram">—</strong>
+                </div>
+
+                <div class="metric">
+                    <span>TEMPERATURE</span>
+                    <strong id="temperature">—</strong>
+                </div>
+
+                <div class="metric">
+                    <span>STORAGE</span>
+                    <strong id="storage">—</strong>
+                </div>
+
+                <div class="metric">
+                    <span>NETWORK</span>
+                    <strong id="network">—</strong>
+                </div>
+
+                <div class="metric">
+                    <span>UPTIME</span>
+                    <strong id="uptime">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="core-panel" class="panel">
+            <div class="panel-header">
+                <h2>CORE</h2>
+                <span id="core-status">—</span>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>MODE</span>
+                    <strong id="core-mode">—</strong>
+                </div>
+
+                <div>
+                    <span>LISTENING</span>
+                    <strong id="listening">—</strong>
+                </div>
+
+                <div>
+                    <span>SESSION</span>
+                    <strong id="session">—</strong>
+                </div>
+
+                <div>
+                    <span>MEMORY</span>
+                    <strong id="memory-status">—</strong>
+                </div>
+
+                <div>
+                    <span>IMPROVEMENT</span>
+                    <strong id="improvement-status">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="providers-panel" class="panel">
+            <div class="panel-header">
+                <h2>PROVIDERS</h2>
+            </div>
+
+            <div id="providers-list" class="provider-list"></div>
+        </section>
+
+        <section id="routing-panel" class="panel">
+            <div class="panel-header">
+                <h2>ROUTING</h2>
+                <span id="routing-state">IDLE</span>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>TASK</span>
+                    <strong id="routing-task">—</strong>
+                </div>
+
+                <div>
+                    <span>PROVIDER</span>
+                    <strong id="routing-provider">—</strong>
+                </div>
+
+                <div>
+                    <span>MODEL</span>
+                    <strong id="routing-model">—</strong>
+                </div>
+
+                <div>
+                    <span>LATENCY</span>
+                    <strong id="routing-latency">—</strong>
+                </div>
+
+                <div>
+                    <span>FALLBACK</span>
+                    <strong id="routing-fallback">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="memory-panel" class="panel">
+            <div class="panel-header">
+                <h2>MEMORY</h2>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>LONG-TERM MEMORY</span>
+                    <strong id="memory-long-term">AVAILABLE</strong>
+                </div>
+
+                <div>
+                    <span>CONVERSATION ARCHIVE</span>
+                    <strong id="memory-archive">AVAILABLE</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="activity-panel" class="panel">
+            <div class="panel-header">
+                <h2>RECENT ACTIVITY</h2>
+                <span id="activity-count">0</span>
+            </div>
+
+            <div id="activity-list" class="activity-list"></div>
+        </section>
+
+        <section id="improvement-panel" class="panel">
+            <div class="panel-header">
+                <h2>SELF-IMPROVEMENT</h2>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>STATUS</span>
+                    <strong id="improvement-available">AVAILABLE</strong>
+                </div>
+            </div>
+        </section>
+
+        <section id="wakeword-panel" class="panel">
+            <div class="panel-header">
+                <h2>VOICE / WAKE</h2>
+            </div>
+
+            <div class="info-grid">
+                <div>
+                    <span>WAKEWORD</span>
+                    <strong id="wakeword-status">—</strong>
+                </div>
+
+                <div>
+                    <span>LISTENING</span>
+                    <strong id="wake-listening">—</strong>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <span>L.U.N.A. Core</span>
+            <span id="last-update">—</span>
+        </footer>
+
+    </main>
+
+    <script src="/dashboard/app.js"></script>
+</body>
+</html>

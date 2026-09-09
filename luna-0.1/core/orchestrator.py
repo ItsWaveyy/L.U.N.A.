@@ -12,6 +12,8 @@ from core.conversation import ConversationStore
 from core.identity.speaker import SpeakerMatch
 from core.improvement.manager import ImprovementManager
 from core.improvement.pipeline import ImprovementPipeline
+from core.dashboard.activity import ActivityManager
+from core.dashboard.runtime_state import CoreRuntimeState
 
 
 CORE_SYSTEM_PROMPT = """
@@ -217,9 +219,9 @@ class LunaCore:
         self.router = AIRouter(providers)
         self.classifier = TaskClassifier()
         self.tools = tools or build_default_tool_registry()
-
+        self.activity: ActivityManager | None = None
+        self.runtime_state: CoreRuntimeState | None = None
         self.conversations = ConversationStore()
-        self.conversations.start_session()
 
         # ---------------------------------------------------------
         # SELF-IMPROVEMENT
@@ -246,6 +248,7 @@ class LunaCore:
         )
 
         self.listening = True
+        self.current_speaker: SpeakerMatch | None = None
         self._warmup_task = None
 
     def _start_warmup_if_possible(self) -> None:
@@ -455,6 +458,18 @@ class LunaCore:
             except Exception:
                 continue
 
+    def set_activity_manager(
+        self,
+        activity: ActivityManager,
+    ) -> None:
+        self.activity = activity
+
+    def set_runtime_state(
+        self,
+        runtime_state: CoreRuntimeState,
+    ) -> None:
+        self.runtime_state = runtime_state
+
     async def ask(
         self,
         prompt: str,
@@ -462,17 +477,40 @@ class LunaCore:
         system_prompt: str | None = None,
     ) -> AIResponse:
 
+        request_started = time.perf_counter()
+
         text = normalize(prompt)
 
+        # ---------------------------------------------------------
+        # RUNTIME STATE — REQUEST RECEIVED
+        # ---------------------------------------------------------
+
+        if self.runtime_state is not None:
+            self.runtime_state.record_request(
+                prompt=prompt,
+                task=task,
+            )
+
         if not text:
-            return AIResponse(
+            response = AIResponse(
                 text="I didn't hear anything.",
                 provider="system",
                 model="listening-state",
                 metadata={
-                    "listening": self.listening
+                    "listening": self.listening,
                 },
             )
+
+            if self.runtime_state is not None:
+                self.runtime_state.record_response(
+                    provider=response.provider,
+                    model=response.model,
+                    latency_seconds=(
+                        time.perf_counter() - request_started
+                    ),
+                )
+
+            return response
 
         # ---------------------------------------------------------
         # STANDBY
@@ -487,7 +525,7 @@ class LunaCore:
                 self.listening = True
 
             else:
-                return AIResponse(
+                response = AIResponse(
                     text="",
                     provider="system",
                     model="listening-state",
@@ -498,6 +536,18 @@ class LunaCore:
                         ),
                     },
                 )
+
+                if self.runtime_state is not None:
+                    self.runtime_state.record_response(
+                        provider=response.provider,
+                        model=response.model,
+                        latency_seconds=(
+                            time.perf_counter()
+                            - request_started
+                        ),
+                    )
+
+                return response
 
         # ---------------------------------------------------------
         # SLEEP
@@ -510,7 +560,7 @@ class LunaCore:
 
             self.listening = False
 
-            return AIResponse(
+            response = AIResponse(
                 text="",
                 provider="system",
                 model="listening-state",
@@ -521,6 +571,18 @@ class LunaCore:
                     ),
                 },
             )
+
+            if self.runtime_state is not None:
+                self.runtime_state.record_response(
+                    provider=response.provider,
+                    model=response.model,
+                    latency_seconds=(
+                        time.perf_counter()
+                        - request_started
+                    ),
+                )
+
+            return response
 
         # ---------------------------------------------------------
         # REMINDERS
@@ -540,11 +602,53 @@ class LunaCore:
                     "tools_used": ["create_reminder"],
                 })
 
+                total_seconds = (
+                    time.perf_counter()
+                    - request_started
+                )
+
+                reminder_response.metadata[
+                    "core_total_seconds"
+                ] = total_seconds
+
+                if self.runtime_state is not None:
+                    self.runtime_state.begin_routing(
+                        task="fast",
+                        provider="core",
+                        model="reminder-scheduler",
+                    )
+
+                    self.runtime_state.complete_routing(
+                        task="fast",
+                        provider="core",
+                        model="reminder-scheduler",
+                        fallback_used=False,
+                        fallback_from=None,
+                        latency_seconds=total_seconds,
+                    )
+
+                    self.runtime_state.record_response(
+                        provider="core",
+                        model="reminder-scheduler",
+                        latency_seconds=total_seconds,
+                    )
+
+                if self.activity is not None:
+                    self.activity.record(
+                        event_type="reminder",
+                        message="Created a reminder.",
+                        task="fast",
+                        provider="core",
+                        model="reminder-scheduler",
+                        latency_seconds=total_seconds,
+                        fallback_used=False,
+                        fallback_from=None,
+                    )
+
                 return reminder_response
 
-
         # ---------------------------------------------------------
-        # NORMAL REQUEST
+        # CLASSIFICATION
         # ---------------------------------------------------------
 
         classification_started = time.perf_counter()
@@ -561,6 +665,19 @@ class LunaCore:
             time.perf_counter()
             - classification_started
         )
+
+        # ---------------------------------------------------------
+        # RUNTIME STATE — ROUTING STARTED
+        # ---------------------------------------------------------
+
+        if self.runtime_state is not None:
+            self.runtime_state.begin_routing(
+                task=task,
+            )
+
+        # ---------------------------------------------------------
+        # SYSTEM PROMPT
+        # ---------------------------------------------------------
 
         combined_system_prompt = CORE_SYSTEM_PROMPT
 
@@ -679,6 +796,11 @@ class LunaCore:
                 "local_system_prompt": local_system_prompt,
             },
         )
+
+        # ---------------------------------------------------------
+        # PROVIDER GENERATION
+        # ---------------------------------------------------------
+
         provider_started = time.perf_counter()
 
         response = await self.router.generate(
@@ -689,6 +811,10 @@ class LunaCore:
             time.perf_counter()
             - provider_started
         )
+
+        # ---------------------------------------------------------
+        # TOOL EXECUTION
+        # ---------------------------------------------------------
 
         tool_calls = parse_tool_calls(response.text)
 
@@ -707,10 +833,17 @@ class LunaCore:
                         )
                     ),
                 )
+
                 tool_results.append({
                     "name": name,
                     "result": result,
                 })
+
+            # -----------------------------------------------------
+            # TOOL COMPLETION GENERATION
+            # -----------------------------------------------------
+
+            completion_started = time.perf_counter()
 
             completion_request = AIRequest(
                 prompt=(
@@ -728,12 +861,33 @@ class LunaCore:
                 ),
                 metadata=request.metadata.copy(),
             )
-            response = await self.router.generate(completion_request)
+
+            response = await self.router.generate(
+                completion_request
+            )
+
+            completion_seconds = (
+                time.perf_counter()
+                - completion_started
+            )
+
+            provider_generation_seconds += completion_seconds
+
             response.metadata["tools_used"] = [
                 name for name, _ in tool_calls
             ]
+
         else:
             response.metadata["tools_used"] = []
+
+        # ---------------------------------------------------------
+        # FINAL METADATA
+        # ---------------------------------------------------------
+
+        core_total_seconds = (
+            time.perf_counter()
+            - request_started
+        )
 
         response.metadata.update({
             "classification_seconds": (
@@ -742,9 +896,60 @@ class LunaCore:
             "provider_generation_seconds": (
                 provider_generation_seconds
             ),
+            "core_total_seconds": (
+                core_total_seconds
+            ),
             "classified_task": task,
             "listening": self.listening,
         })
+
+        # ---------------------------------------------------------
+        # RUNTIME STATE — ROUTING COMPLETED
+        # ---------------------------------------------------------
+
+        if self.runtime_state is not None:
+            metadata = response.metadata
+
+            self.runtime_state.complete_routing(
+                task=task,
+                provider=response.provider,
+                model=response.model,
+                fallback_used=bool(
+                    metadata.get("fallback_used")
+                ),
+                fallback_from=metadata.get(
+                    "fallback_from"
+                ),
+                latency_seconds=core_total_seconds,
+            )
+
+            self.runtime_state.record_response(
+                provider=response.provider,
+                model=response.model,
+                latency_seconds=core_total_seconds,
+            )
+
+        # ---------------------------------------------------------
+        # ACTIVITY
+        # ---------------------------------------------------------
+
+        if self.activity is not None:
+            metadata = response.metadata
+
+            self.activity.record(
+                event_type="request",
+                message=f"Completed request through {response.provider}.",
+                task=metadata.get("classified_task"),
+                provider=response.provider,
+                model=response.model,
+                latency_seconds=core_total_seconds,
+                fallback_used=bool(
+                    metadata.get("fallback_used")
+                ),
+                fallback_from=metadata.get(
+                    "fallback_from"
+                ),
+            )
 
         return response
 
