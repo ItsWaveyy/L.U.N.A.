@@ -35,11 +35,9 @@ from core.timing import (
 from core.tts.kokoro import KokoroTTS
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
-from tools.memory import initialize_database
 
 
 load_dotenv()
-initialize_database()
 
 
 # ============================================================

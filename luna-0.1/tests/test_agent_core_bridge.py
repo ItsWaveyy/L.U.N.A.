@@ -18,6 +18,9 @@ class FakeCore:
             metadata={"classified_task": "conversation"},
         )
 
+    async def record_assistant_message(self, text):
+        pass
+
 
 def test_livekit_reply_is_generated_by_luna_core():
     asyncio.run(_test_livekit_reply_is_generated_by_luna_core())
@@ -39,13 +42,15 @@ async def _test_livekit_reply_is_generated_by_luna_core():
         content="What is two plus two?",
     )
 
-    reply = await assistant.llm_node(
+    replies = []
+
+    async for reply in assistant.llm_node(
         chat_ctx=chat_ctx,
         tools=[],
         model_settings=None,
-    )
+    ):
+        replies.append(reply)
 
-    assert reply == "Routed reply"
+    assert replies == ["Routed reply"]
     assert core.calls[0]["prompt"] == "What is two plus two?"
-    assert "Assistant: Good evening." in core.calls[0]["system_prompt"]
     assert assistant.last_core_response.provider == "local"

@@ -96,6 +96,8 @@ class SessionSleepWakeController:
         # ---------------------------------------------------------
 
         if not self.luna_core.listening:
+            if self.is_wake_phrase(text):
+                await self.wake(transcript)
             return
 
         # ---------------------------------------------------------
@@ -104,7 +106,7 @@ class SessionSleepWakeController:
 
         # The dedicated ONNX detector handles waking.
         # If Groq later delivers the same wake phrase as a transcript,
-        # consume it instead of sending it to Gemini.
+        # consume it instead of sending it to the LLM.
 
         if self._just_woke:
             self._just_woke = False
