@@ -1,0 +1,956 @@
+:root {
+    --background: #08090c;
+    --panel: #111318;
+    --panel-border: #242831;
+    --text: #f1f3f5;
+    --muted: #858b96;
+    --accent: #d9ff4f;
+    --good: #63e6be;
+    --warning: #ffd166;
+    --critical: #ff6b6b;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: var(--background);
+    color: var(--text);
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "Segoe UI",
+        sans-serif;
+}
+
+.dashboard {
+    width: min(1500px, 94vw);
+    margin: 0 auto;
+    padding: 28px 0 50px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+}
+
+.brand {
+    font-size: 34px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+.subtitle {
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    margin-top: 4px;
+}
+
+.connection {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+}
+
+.status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--warning);
+}
+
+.status-dot.online {
+    background: var(--good);
+}
+
+.status-dot.offline {
+    background: var(--critical);
+}
+
+.panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 12px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+}
+
+.panel-header span {
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.metric-grid,
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+}
+
+.metric,
+.info-grid > div {
+    background: #0b0d11;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.metric span,
+.info-grid span {
+    display: block;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    margin-bottom: 7px;
+}
+
+.metric strong,
+.info-grid strong {
+    font-size: 18px;
+    font-weight: 600;
+}
+
+.provider-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+}
+
+.provider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #0b0d11;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    padding: 15px;
+}
+
+.provider-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--critical);
+    flex-shrink: 0;
+}
+
+.provider-dot.healthy {
+    background: var(--good);
+}
+
+.provider-name {
+    font-weight: 600;
+}
+
+.provider-model {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 3px;
+}
+
+.activity-list,
+.alerts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.activity-item,
+.alert {
+    border: 1px solid var(--panel-border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    background: #0b0d11;
+}
+
+.activity-main {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+}
+
+.activity-message {
+    font-size: 13px;
+}
+
+.activity-meta {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 5px;
+}
+
+.alert {
+    border-left: 3px solid var(--good);
+}
+
+.alert.warning {
+    border-left-color: var(--warning);
+}
+
+.alert.critical {
+    border-left-color: var(--critical);
+}
+
+.alert.info {
+    border-left-color: var(--good);
+}
+
+.alert-message {
+    font-size: 13px;
+}
+
+.alert-time {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 4px;
+}
+
+footer {
+    display: flex;
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 12px 4px;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (min-width: 900px) {
+    #system-panel,
+    #core-panel {
+        width: auto;
+        display: block;
+        margin-right: 0;
+    }
+}
+
+@media (max-width: 600px) {
+    .dashboard {
+        width: 92vw;
+        padding-top: 18px;
+    }
+
+    .brand {
+        font-size: 27px;
+    }
+
+    .topbar {
+        align-items: flex-start;
+    }
+}
+
+.focused {
+    border-color: var(--accent);
+    box-shadow:
+        0 0 0 1px rgba(217, 255, 79, 0.15),
+        0 0 24px rgba(217, 255, 79, 0.08);
+}
+
+[data-priority="1"] {
+    border-color: rgba(255, 209, 102, 0.45);
+}
+
+[data-priority="2"] {
+    border-color: rgba(255, 107, 107, 0.65);
+}
+
+.dashboard-controls {
+    position: sticky;
+    top: 12px;
+    z-index: 20;
+    backdrop-filter: blur(12px);
+}
+
+.control-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.control-row label {
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    min-width: 70px;
+}
+
+.control-row select,
+.control-row button {
+    background: #0b0d11;
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font: inherit;
+}
+
+.control-row select {
+    min-width: 150px;
+}
+
+.control-row button {
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        background 0.15s ease,
+        transform 0.15s ease;
+}
+
+.control-row button:hover {
+    border-color: var(--accent);
+    background: #15191f;
+}
+
+.control-row button:active {
+    transform: translateY(1px);
+}
+
+body[data-dashboard-mode="diagnostics"] .panel {
+    transition: border-color 0.2s ease;
+}
+
+body[data-dashboard-mode="inference"] #routing-panel {
+    border-color: var(--accent);
+}
+
+body[data-dashboard-mode="alert"] #alerts-panel {
+    border-color: var(--critical);
+}
+
+/* =========================================================
+   DASHBOARD LAYOUT MODES
+   ========================================================= */
+
+#dashboard {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Default ------------------------------------------------ */
+
+body[data-dashboard-mode="default"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="default"] #dashboard > .topbar,
+body[data-dashboard-mode="default"] #dashboard > #control-panel,
+body[data-dashboard-mode="default"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="default"] #alerts-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="default"] #system-panel,
+body[data-dashboard-mode="default"] #core-panel {
+    grid-column: span 6;
+}
+
+body[data-dashboard-mode="default"] #providers-panel,
+body[data-dashboard-mode="default"] #routing-panel {
+    grid-column: span 6;
+}
+
+body[data-dashboard-mode="default"] #memory-panel,
+body[data-dashboard-mode="default"] #activity-panel,
+body[data-dashboard-mode="default"] #improvement-panel,
+body[data-dashboard-mode="default"] #wakeword-panel {
+    grid-column: span 6;
+}
+
+
+/* Monitoring ------------------------------------------------ */
+
+body[data-dashboard-mode="monitoring"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="monitoring"] #dashboard > .topbar,
+body[data-dashboard-mode="monitoring"] #dashboard > #control-panel,
+body[data-dashboard-mode="monitoring"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="monitoring"] #alerts-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="monitoring"] #system-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="monitoring"] #core-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="monitoring"] #providers-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="monitoring"] #routing-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="monitoring"] #activity-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="monitoring"] #memory-panel,
+body[data-dashboard-mode="monitoring"] #improvement-panel,
+body[data-dashboard-mode="monitoring"] #wakeword-panel {
+    grid-column: span 4;
+}
+
+
+/* Diagnostics ------------------------------------------------ */
+
+body[data-dashboard-mode="diagnostics"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="diagnostics"] #dashboard > .topbar,
+body[data-dashboard-mode="diagnostics"] #dashboard > #control-panel,
+body[data-dashboard-mode="diagnostics"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="diagnostics"] #alerts-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="diagnostics"] #system-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="diagnostics"] #core-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="diagnostics"] #providers-panel {
+    grid-column: span 7;
+}
+
+body[data-dashboard-mode="diagnostics"] #routing-panel {
+    grid-column: span 5;
+}
+
+body[data-dashboard-mode="diagnostics"] #activity-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="diagnostics"] #memory-panel {
+    grid-column: span 6;
+}
+
+body[data-dashboard-mode="diagnostics"] #improvement-panel,
+body[data-dashboard-mode="diagnostics"] #wakeword-panel {
+    grid-column: span 3;
+}
+
+
+/* Inference ------------------------------------------------ */
+
+body[data-dashboard-mode="inference"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="inference"] #dashboard > .topbar,
+body[data-dashboard-mode="inference"] #dashboard > #control-panel,
+body[data-dashboard-mode="inference"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="inference"] #routing-panel {
+    grid-column: 1 / -1;
+    order: 1;
+}
+
+body[data-dashboard-mode="inference"] #alerts-panel {
+    grid-column: 1 / -1;
+    order: 2;
+}
+
+body[data-dashboard-mode="inference"] #core-panel {
+    grid-column: span 4;
+    order: 3;
+}
+
+body[data-dashboard-mode="inference"] #system-panel {
+    grid-column: span 8;
+    order: 4;
+}
+
+body[data-dashboard-mode="inference"] #providers-panel {
+    grid-column: 1 / -1;
+    order: 5;
+}
+
+body[data-dashboard-mode="inference"] #activity-panel {
+    grid-column: 1 / -1;
+    order: 6;
+}
+
+body[data-dashboard-mode="inference"] #memory-panel,
+body[data-dashboard-mode="inference"] #improvement-panel,
+body[data-dashboard-mode="inference"] #wakeword-panel {
+    grid-column: span 4;
+    order: 7;
+}
+
+
+/* Improvement ------------------------------------------------ */
+
+body[data-dashboard-mode="improvement"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="improvement"] #dashboard > .topbar,
+body[data-dashboard-mode="improvement"] #dashboard > #control-panel,
+body[data-dashboard-mode="improvement"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="improvement"] #improvement-panel {
+    grid-column: 1 / -1;
+    order: 1;
+}
+
+body[data-dashboard-mode="improvement"] #alerts-panel {
+    grid-column: 1 / -1;
+    order: 2;
+}
+
+body[data-dashboard-mode="improvement"] #activity-panel {
+    grid-column: span 8;
+    order: 3;
+}
+
+body[data-dashboard-mode="improvement"] #core-panel {
+    grid-column: span 4;
+    order: 4;
+}
+
+body[data-dashboard-mode="improvement"] #system-panel {
+    grid-column: span 6;
+    order: 5;
+}
+
+body[data-dashboard-mode="improvement"] #providers-panel {
+    grid-column: span 6;
+    order: 6;
+}
+
+body[data-dashboard-mode="improvement"] #routing-panel {
+    grid-column: 1 / -1;
+    order: 7;
+}
+
+body[data-dashboard-mode="improvement"] #memory-panel,
+body[data-dashboard-mode="improvement"] #wakeword-panel {
+    grid-column: span 6;
+    order: 8;
+}
+
+
+/* Network ------------------------------------------------ */
+
+body[data-dashboard-mode="network"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="network"] #dashboard > .topbar,
+body[data-dashboard-mode="network"] #dashboard > #control-panel,
+body[data-dashboard-mode="network"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="network"] #system-panel {
+    grid-column: span 5;
+}
+
+body[data-dashboard-mode="network"] #network-panel {
+    grid-column: span 7;
+}
+
+body[data-dashboard-mode="network"] #providers-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="network"] #routing-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="network"] #alerts-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="network"] #activity-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="network"] #core-panel,
+body[data-dashboard-mode="network"] #memory-panel,
+body[data-dashboard-mode="network"] #improvement-panel,
+body[data-dashboard-mode="network"] #wakeword-panel {
+    grid-column: span 6;
+}
+
+
+/* Memory ------------------------------------------------ */
+
+body[data-dashboard-mode="memory"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="memory"] #dashboard > .topbar,
+body[data-dashboard-mode="memory"] #dashboard > #control-panel,
+body[data-dashboard-mode="memory"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="memory"] #memory-panel {
+    grid-column: 1 / -1;
+    order: 1;
+}
+
+body[data-dashboard-mode="memory"] #activity-panel {
+    grid-column: span 8;
+    order: 2;
+}
+
+body[data-dashboard-mode="memory"] #core-panel {
+    grid-column: span 4;
+    order: 3;
+}
+
+body[data-dashboard-mode="memory"] #alerts-panel {
+    grid-column: 1 / -1;
+    order: 4;
+}
+
+body[data-dashboard-mode="memory"] #system-panel,
+body[data-dashboard-mode="memory"] #providers-panel,
+body[data-dashboard-mode="memory"] #routing-panel,
+body[data-dashboard-mode="memory"] #improvement-panel,
+body[data-dashboard-mode="memory"] #wakeword-panel {
+    grid-column: span 6;
+    order: 5;
+}
+
+
+/* Security ------------------------------------------------ */
+
+body[data-dashboard-mode="security"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="security"] #dashboard > .topbar,
+body[data-dashboard-mode="security"] #dashboard > #control-panel,
+body[data-dashboard-mode="security"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="security"] #alerts-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="security"] #core-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="security"] #providers-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="security"] #wakeword-panel {
+    grid-column: span 6;
+}
+
+body[data-dashboard-mode="security"] #activity-panel {
+    grid-column: span 6;
+}
+
+body[data-dashboard-mode="security"] #system-panel,
+body[data-dashboard-mode="security"] #routing-panel,
+body[data-dashboard-mode="security"] #memory-panel,
+body[data-dashboard-mode="security"] #improvement-panel {
+    grid-column: span 6;
+}
+
+
+/* Idle ------------------------------------------------ */
+
+body[data-dashboard-mode="idle"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="idle"] #dashboard > .topbar,
+body[data-dashboard-mode="idle"] #dashboard > #control-panel,
+body[data-dashboard-mode="idle"] #dashboard > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="idle"] #core-panel {
+    grid-column: span 8;
+}
+
+body[data-dashboard-mode="idle"] #system-panel {
+    grid-column: span 4;
+}
+
+body[data-dashboard-mode="idle"] #activity-panel {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="idle"] #alerts-panel,
+body[data-dashboard-mode="idle"] #providers-panel,
+body[data-dashboard-mode="idle"] #routing-panel,
+body[data-dashboard-mode="idle"] #memory-panel,
+body[data-dashboard-mode="idle"] #improvement-panel,
+body[data-dashboard-mode="idle"] #wakeword-panel {
+    grid-column: span 6;
+}
+
+
+/* Alert ------------------------------------------------ */
+
+body[data-dashboard-mode="alert"] #dashboard {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 16px;
+}
+
+body[data-dashboard-mode="alert"] #dashboard > .topbar,
+body[data-dashboard-mode="alert"] #dashboard > #control-panel,
+body[data-dashboard-mode="alert"] > footer {
+    grid-column: 1 / -1;
+}
+
+body[data-dashboard-mode="alert"] #alerts-panel {
+    grid-column: 1 / -1;
+    order: 1;
+    border-color: var(--critical);
+}
+
+body[data-dashboard-mode="alert"] #system-panel {
+    grid-column: span 7;
+    order: 2;
+}
+
+body[data-dashboard-mode="alert"] #core-panel {
+    grid-column: span 5;
+    order: 3;
+}
+
+body[data-dashboard-mode="alert"] #providers-panel,
+body[data-dashboard-mode="alert"] #routing-panel,
+body[data-dashboard-mode="alert"] #activity-panel,
+body[data-dashboard-mode="alert"] #memory-panel,
+body[data-dashboard-mode="alert"] #improvement-panel,
+body[data-dashboard-mode="alert"] #wakeword-panel {
+    grid-column: span 6;
+    order: 4;
+}
+
+
+/* Panel focus / priority -------------------------------- */
+
+.panel.focused {
+    position: relative;
+    z-index: 5;
+    transform: scale(1.01);
+    transition:
+        transform 0.2s ease,
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+}
+
+.panel[data-priority="1"] {
+    box-shadow: 0 0 0 1px rgba(255, 209, 102, 0.18);
+}
+
+.panel[data-priority="2"] {
+    box-shadow: 0 0 0 1px rgba(255, 107, 107, 0.25);
+}
+
+
+/* Mobile ------------------------------------------------ */
+
+@media (max-width: 900px) {
+    body[data-dashboard-mode] #dashboard {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    body[data-dashboard-mode] #dashboard > * {
+        width: 100% !important;
+        order: initial !important;
+    }
+
+    .panel.focused {
+        transform: none;
+    }
+}
+
+/* Network panel sizing */
+#network-panel {
+    grid-column: span 6;
+}
+
+#network-panel .info-grid {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* =========================================================
+   L.U.N.A. ASSISTANT INTERFACE
+   ========================================================= */
+
+.assistant-panel {
+    grid-column: 1 / -1;
+}
+
+.assistant-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+
+    min-height: 180px;
+    max-height: 360px;
+
+    overflow-y: auto;
+
+    padding: 14px;
+
+    background: #090b0f;
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+}
+
+.assistant-message {
+    padding: 10px 12px;
+    border-radius: 8px;
+    max-width: 85%;
+}
+
+.system-message,
+.luna-message {
+    align-self: flex-start;
+}
+
+.user-message {
+    align-self: flex-end;
+}
+
+.error-message {
+    align-self: flex-start;
+}
+
+.assistant-role {
+    margin-bottom: 4px;
+
+    color: var(--muted);
+
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+}
+
+.assistant-text {
+    color: var(--text);
+
+    font-size: 14px;
+    line-height: 1.5;
+
+    white-space: pre-wrap;
+}
+
+.assistant-input-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.assistant-input-row input {
+    flex: 1;
+
+    min-width: 0;
+
+    padding: 12px 14px;
+
+    background: #090b0f;
+    color: var(--text);
+
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+
+    outline: none;
+}
+
+.assistant-input-row input:focus {
+    border-color: var(--accent);
+}
+
+.assistant-input-row button {
+    padding: 12px 18px;
+
+    background: #15191f;
+    color: var(--text);
+
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+
+    cursor: pointer;
+}
+
+.assistant-input-row button:hover {
+    border-color: var(--accent);
+}

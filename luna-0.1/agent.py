@@ -1,13 +1,10 @@
 import asyncio
-import io
-import wave
 import time
-from typing import AsyncIterable, AsyncGenerator
+from typing import AsyncGenerator
 
-import requests
 from dotenv import load_dotenv
 
-from livekit import agents, rtc
+from livekit import agents
 from livekit.agents import (
     AgentServer,
     AgentSession,
@@ -22,9 +19,9 @@ from livekit.agents import (
 from livekit.plugins import ai_coustics, groq
 from livekit.plugins import silero
 
-from core.orchestrator import LunaCore, SessionSleepWakeController
+from core.orchestrator import SessionSleepWakeController
+from core.client import CoreClient
 from core.standby.manager import StandbyManager
-from core.reminders import ReminderScheduler
 from core.identity.audio import (
     SpeakerAudioBuffer,
     SpeakerIdentityProcessor,
@@ -38,11 +35,15 @@ from core.timing import (
 from core.tts.kokoro import KokoroTTS
 
 from prompts import AGENT_INSTRUCTION, build_session_instruction
-from tools.memory import initialize_database
 
 
 load_dotenv()
-initialize_database()
+
+
+# ============================================================
+# LIVEKIT FRAMEWORK PLACEHOLDER
+# ============================================================
+
 
 class PlaceholderLLM(llm.LLM):
     """
@@ -50,11 +51,22 @@ class PlaceholderLLM(llm.LLM):
 
     L.U.N.A. does NOT use this model for actual generation.
 
-    LiveKit 1.7.0 requires AgentSession to have an LLM object
-    attached before generate_reply() can be called.
+    LiveKit requires AgentSession to have an LLM object
+    attached before generation can occur.
 
-    Actual L.U.N.A. generation happens inside Assistant.llm_node()
-    through LunaCore.
+    Actual L.U.N.A. generation happens through:
+
+        Assistant.llm_node()
+            ↓
+        CoreClient.ask()
+            ↓
+        L.U.N.A. Core API
+            ↓
+        LunaCore
+            ↓
+        Router
+            ↓
+        Provider
     """
 
     def chat(
@@ -69,12 +81,27 @@ class PlaceholderLLM(llm.LLM):
         )
 
 
+# ============================================================
+# LIVEKIT ASSISTANT
+# ============================================================
+
+
 class Assistant(Agent):
+    """
+    LiveKit-facing voice interface.
+
+    This class does not own L.U.N.A.'s persistent runtime.
+
+    It translates LiveKit conversation events into calls
+    to the persistent L.U.N.A. Core through CoreClient.
+    """
+
     def __init__(
         self,
         sleep_controller: SessionSleepWakeController,
-        luna_core: LunaCore,
+        luna_core: CoreClient,
     ) -> None:
+
         self.sleep_controller = sleep_controller
         self.luna_core = luna_core
         self.last_core_response = None
@@ -88,6 +115,7 @@ class Assistant(Agent):
         """Return the newest text message spoken by the user."""
 
         for message in reversed(chat_ctx.messages()):
+
             if message.role != "user":
                 continue
 
@@ -102,11 +130,17 @@ class Assistant(Agent):
 
     @staticmethod
     def _conversation_context(chat_ctx) -> str:
-        """Render recent text turns for providers that accept a flat prompt."""
+        """
+        Render recent text turns for providers that accept
+        a flat prompt.
+
+        Kept for compatibility with the existing voice layer.
+        """
 
         turns = []
 
         for message in chat_ctx.messages()[-8:]:
+
             if message.role not in {
                 "user",
                 "assistant",
@@ -131,7 +165,7 @@ class Assistant(Agent):
         model_settings,
     ) -> AsyncGenerator[str, None]:
         """
-        Route live responses through LunaCore.
+        Route LiveKit responses through the persistent Core API.
         """
 
         prompt = self._latest_user_message(
@@ -140,8 +174,6 @@ class Assistant(Agent):
 
         if not prompt:
             return
-
-        system_prompt = AGENT_INSTRUCTION
 
         timing = TurnTiming()
 
@@ -156,7 +188,7 @@ class Assistant(Agent):
 
         response = await self.luna_core.ask(
             prompt=prompt,
-            system_prompt=system_prompt,
+            system_prompt=AGENT_INSTRUCTION,
         )
 
         core_total = (
@@ -176,6 +208,7 @@ class Assistant(Agent):
         if metadata.get(
             "classification_seconds"
         ) is not None:
+
             timing.add(
                 "classification",
                 metadata[
@@ -186,6 +219,7 @@ class Assistant(Agent):
         if metadata.get(
             "provider_generation_seconds"
         ) is not None:
+
             timing.add(
                 "provider_generation",
                 metadata[
@@ -202,6 +236,7 @@ class Assistant(Agent):
         )
 
         if metadata.get("fallback_used"):
+
             luna_log(
                 "Core fallback: "
                 f"{metadata.get('fallback_from')} "
@@ -210,7 +245,8 @@ class Assistant(Agent):
             )
 
         if response.text:
-            self.luna_core.record_assistant_message(
+
+            await self.luna_core.record_assistant_message(
                 response.text
             )
 
@@ -234,6 +270,7 @@ class Assistant(Agent):
             transcript = transcript()
 
         if transcript is None:
+
             transcript = getattr(
                 new_message,
                 "raw_text_content",
@@ -247,7 +284,7 @@ class Assistant(Agent):
         if not transcript:
             raise StopResponse()
 
-        self.luna_core.record_user_message(
+        await self.luna_core.record_user_message(
             transcript
         )
 
@@ -255,10 +292,21 @@ class Assistant(Agent):
             transcript
         )
 
-        if not self.sleep_controller.luna_core.listening:
+        if not self.luna_core.listening:
             raise StopResponse()
 
+
+# ============================================================
+# LIVEKIT SERVER
+# ============================================================
+
+
 server = AgentServer()
+
+
+# ============================================================
+# LIVEKIT SESSION
+# ============================================================
 
 
 @server.rtc_session(
@@ -267,19 +315,23 @@ server = AgentServer()
 async def my_agent(
     ctx: agents.JobContext,
 ):
+
+    # --------------------------------------------------------
+    # LIVEKIT SESSION
+    # --------------------------------------------------------
+
     session = AgentSession(
-        # LiveKit requires an LLM object to exist.
-        #
-        # This placeholder exists only so LiveKit's
-        # AgentSession lifecycle can initialize.
-        #
-        # Actual generation is routed through
-        # Assistant.llm_node() -> LunaCore.
+
+        # LiveKit framework requirement.
         llm=PlaceholderLLM(),
+
+        # Voice output.
         tts=KokoroTTS(),
 
+        # Speech-to-text.
         stt=groq.STT(),
 
+        # Voice activity detection.
         vad=silero.VAD.load(
             min_speech_duration=0.05,
             min_silence_duration=0.55,
@@ -287,7 +339,9 @@ async def my_agent(
             activation_threshold=0.5,
         ),
 
+        # Turn handling.
         turn_handling=TurnHandlingOptions(
+
             endpointing=EndpointingOptions(
                 mode="dynamic",
                 min_delay=0.45,
@@ -312,35 +366,26 @@ async def my_agent(
         ),
     )
 
-    luna_core = LunaCore()
+    # --------------------------------------------------------
+    # PERSISTENT CORE ACCESS
+    # --------------------------------------------------------
+    #
+    # The LiveKit agent does NOT create or own LunaCore.
+    #
+    # CoreClient communicates with the persistent
+    # LunaCoreRuntime through the Core API.
+    # --------------------------------------------------------
+
+    luna_core = CoreClient()
+
+    # --------------------------------------------------------
+    # LIVEKIT ACCESS-POINT SERVICES
+    # --------------------------------------------------------
 
     standby_manager = StandbyManager(
         luna_core=luna_core,
         session=session,
     )
-
-    async def handle_reminder(
-        reminder: dict,
-    ) -> None:
-        message = (
-            "Yo Reece, you asked me to remind you: "
-            f"{reminder['message']}"
-        )
-
-        luna_log(
-            "Reminder fired: "
-            f"{reminder['message']}"
-        )
-
-        await standby_manager.notify(
-            message
-        )
-
-    reminder_scheduler = ReminderScheduler(
-        conversations=luna_core.conversations,
-        on_reminder=standby_manager.notify,
-    )
-
 
     sleep_controller = SessionSleepWakeController(
         session=session,
@@ -348,47 +393,9 @@ async def my_agent(
         standby_manager=standby_manager,
     )
 
-    async def cleanup():
-        luna_log(
-            "Shutdown: ending conversation session..."
-        )
-
-    async def cleanup():
-        luna_log(
-            "Shutdown: stopping reminder scheduler..."
-        )
-
-        await reminder_scheduler.shutdown()
-
-        luna_log(
-            "Shutdown: reminder scheduler stopped."
-        )
-
-        luna_log(
-            "Shutdown: ending conversation session..."
-        )
-
-        luna_core.conversations.end_session()
-
-        luna_log(
-            "Shutdown: conversation session ended."
-        )
-
-        luna_log(
-            "Shutdown: stopping standby manager..."
-        )
-
-        await standby_manager.shutdown()
-
-        luna_log(
-            "Shutdown: standby manager stopped."
-        )
-
-    def on_session_close(event):
-        asyncio.create_task(cleanup())
-
-    session.on("close", on_session_close)
-
+    # --------------------------------------------------------
+    # SPEAKER IDENTITY / AUDIO PIPELINE
+    # --------------------------------------------------------
 
     speaker_identity = SpeakerIdentity()
 
@@ -400,19 +407,63 @@ async def my_agent(
         ai_coustics.audio_enhancement()
     )
 
+    def on_speaker_identified(match):
+        asyncio.create_task(
+            luna_core.set_speaker(match)
+        )
+
     speaker_processor = SpeakerIdentityProcessor(
         buffer=speaker_buffer,
         speaker_identity=speaker_identity,
         downstream=ai_coustics_processor,
-        on_identified=luna_core.set_speaker,
+        on_identified=on_speaker_identified,
     )
+
+    # --------------------------------------------------------
+    # SESSION CLEANUP
+    # --------------------------------------------------------
+
+    async def cleanup():
+
+        luna_log(
+            "LiveKit session shutdown: "
+            "stopping standby manager..."
+        )
+
+        await standby_manager.shutdown()
+
+        luna_log(
+            "LiveKit session shutdown: "
+            "standby manager stopped."
+        )
+
+        luna_log(
+            "LiveKit session shutdown: "
+            "Core remains online."
+        )
+
+    def on_session_close(event):
+        asyncio.create_task(
+            cleanup()
+        )
+
+    session.on(
+        "close",
+        on_session_close,
+    )
+
+    # --------------------------------------------------------
+    # START LIVEKIT SESSION
+    # --------------------------------------------------------
 
     await session.start(
         room=ctx.room,
+
         agent=Assistant(
             sleep_controller=sleep_controller,
             luna_core=luna_core,
         ),
+
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
                 noise_cancellation=speaker_processor,
@@ -420,11 +471,15 @@ async def my_agent(
         ),
     )
 
-    reminder_scheduler.start()
+    session.input.set_audio_enabled(False)
 
     luna_log(
         "Speaker identity processor: ONLINE"
     )
+
+    # --------------------------------------------------------
+    # STARTUP GREETING
+    # --------------------------------------------------------
 
     luna_log(
         "Generating startup greeting through Core..."
@@ -432,13 +487,17 @@ async def my_agent(
 
     startup_timing = TurnTiming()
 
-    startup_instruction = build_session_instruction()
+    startup_instruction = (
+        build_session_instruction()
+    )
 
     luna_log(
         "Startup prompt loaded from prompts.py."
     )
 
-    startup_core_started = time.perf_counter()
+    startup_core_started = (
+        time.perf_counter()
+    )
 
     startup_response = await luna_core.ask(
         prompt=startup_instruction,
@@ -463,15 +522,26 @@ async def my_agent(
     )
 
     if startup_response.text:
+
         luna_log(
-            f"Startup greeting: {startup_response.text}"
+            "Startup greeting: "
+            f"{startup_response.text}"
         )
 
         await session.say(
             startup_response.text
         )
 
-    log_turn_timing(startup_timing)
+    session.input.set_audio_enabled(True)
+
+    log_turn_timing(
+        startup_timing
+    )
+
+
+# ============================================================
+# ENTRYPOINT
+# ============================================================
 
 
 if __name__ == "__main__":

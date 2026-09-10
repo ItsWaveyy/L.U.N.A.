@@ -8,7 +8,7 @@ from collections.abc import Awaitable, Callable
 from core.conversation import ConversationStore
 
 
-ReminderCallback = Callable[[dict], Awaitable[None]]
+ReminderCallback = Callable[[str], Awaitable[None]]
 
 
 class ReminderScheduler:

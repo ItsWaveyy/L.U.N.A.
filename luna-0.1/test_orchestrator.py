@@ -23,19 +23,39 @@ class FakeSession:
     def on(self, event_name, callback):
         self.handlers[event_name] = callback
 
+class FakeStandbyManager:
+    def __init__(self, luna):
+        self.luna = luna
+
+    async def enter_standby(self):
+        self.luna.set_listening(False)
+
+    async def wake(self):
+        self.luna.set_listening(True)
+
 
 async def _run_sleep_wake_session_test():
     from agent import SessionSleepWakeController
 
     luna = LunaCore([MockProvider()])
     session = FakeSession()
-    controller = SessionSleepWakeController(session, luna)
+    standby_manager = FakeStandbyManager(luna)
 
-    controller.handle_transcript("that's all for now luna")
+    controller = SessionSleepWakeController(
+        session=session,
+        luna_core=luna,
+        standby_manager=standby_manager,
+    )
+
+    await controller.handle_transcript(
+        "that's all for now luna"
+    )
 
     assert not luna.listening
 
-    controller.handle_transcript("luna, wake up")
+    await controller.handle_transcript(
+        "luna, wake up"
+    )
 
     assert luna.listening
 
