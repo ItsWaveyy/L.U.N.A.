@@ -16,12 +16,14 @@ class AIRouter:
         "research": ["gemini", "groq", "local"],
         "creative": ["gemini", "groq", "local"],
         "conversation": ["gemini", "groq", "local"],
-        "fast": ["local", "groq", "gemini"],
+        "fast": ["groq", "gemini", "local"],
         "general": ["gemini", "groq", "local"],
     }
 
     def __init__(self, providers: list[AIProvider]):
         self.providers = providers
+        self._provider_cooldowns: dict[str, float] = {}
+        self._provider_cooldown_seconds = 60.0
 
     async def generate(
         self,
@@ -112,6 +114,9 @@ class AIRouter:
 
             except Exception as exc:
                 last_error = exc
+                self._provider_cooldowns[provider.name] = (
+                    time.monotonic() + self._provider_cooldown_seconds
+                )
 
                 print(
                     f"[L.U.N.A.] Provider '{provider.name}' failed: {exc}"
@@ -172,6 +177,8 @@ class AIRouter:
         # NORMAL MODE
         # ---------------------------------------------------------
 
+        now = time.monotonic()
+
         for provider_name in preferences:
             provider = available.get(provider_name)
 
@@ -179,6 +186,14 @@ class AIRouter:
                 continue
 
             if task not in provider.capabilities:
+                continue
+
+            cooldown_until = self._provider_cooldowns.get(
+                provider.name,
+                0.0,
+            )
+
+            if cooldown_until > now:
                 continue
 
             ranked.append(provider)

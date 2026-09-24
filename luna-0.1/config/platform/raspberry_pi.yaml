@@ -1,0 +1,21 @@
+platform: linux
+architecture: aarch64
+device: raspberry_pi_5
+python: "3.13"
+
+audio:
+  backend: pipewire
+  input: usb
+  output: usb
+
+services:
+  manager: systemd
+
+capabilities:
+  local_audio: true
+  local_tts: true
+  local_llm: true
+
+local_llm:
+  runtime: ollama
+  model: qwen3:1.7b

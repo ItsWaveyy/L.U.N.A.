@@ -366,6 +366,15 @@ async def my_agent(
         ),
     )
 
+    @session.on("user_input_transcribed")
+    def on_user_input_transcribed(event):
+        if event.is_final:
+            print(
+                f"[L.U.N.A.] FINAL TRANSCRIPT "
+                f"t={time.perf_counter():.6f} "
+                f"text={event.transcript!r}"
+            )
+
     # --------------------------------------------------------
     # PERSISTENT CORE ACCESS
     # --------------------------------------------------------
@@ -465,9 +474,7 @@ async def my_agent(
         ),
 
         room_options=room_io.RoomOptions(
-            audio_input=room_io.AudioInputOptions(
-                noise_cancellation=speaker_processor,
-            ),
+            audio_input=room_io.AudioInputOptions(),
         ),
     )
 
