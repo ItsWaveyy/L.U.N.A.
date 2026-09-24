@@ -775,3 +775,40 @@ setInterval(
     loadTelemetry,
     REFRESH_INTERVAL
 );
+
+document.querySelectorAll(".service-actions button").forEach((button) => {
+    button.addEventListener("click", async () => {
+        const service = button.dataset.service;
+        const action = button.dataset.action;
+
+        button.disabled = true;
+
+        try {
+            const response = await fetch("/api/service", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    service,
+                    action,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.detail || "Service control failed");
+            }
+
+            console.log("[L.U.N.A.] Service control:", data);
+        } catch (error) {
+            console.error(
+                "[L.U.N.A.] Service control failed:",
+                error,
+            );
+        } finally {
+            button.disabled = false;
+        }
+    });
+});

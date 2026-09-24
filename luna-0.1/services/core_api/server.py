@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any
-
+import subprocess
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
@@ -10,6 +10,43 @@ from pathlib import Path
 from fastapi.responses import FileResponse
 
 from config import LUNA_MODE
+
+LUNA_SERVICES = {
+    "luna-core": "luna-core.service",
+    "luna-agent": "luna-agent.service",
+    "kokoro": "kokoro.service",
+    "ollama": "ollama.service",
+}
+
+
+def control_luna_service(service: str, action: str) -> dict:
+    if service not in LUNA_SERVICES:
+        raise ValueError(f"Unknown LUNA service: {service}")
+
+    if action not in {"start", "stop", "restart"}:
+        raise ValueError(f"Unsupported service action: {action}")
+
+    unit = LUNA_SERVICES[service]
+
+    result = subprocess.run(
+        ["sudo", "systemctl", action, unit],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            result.stderr.strip()
+            or f"systemctl {action} failed for {unit}"
+        )
+
+    return {
+        "service": service,
+        "action": action,
+        "status": "accepted",
+    }
 
 class AskRequest(BaseModel):
     prompt: str
@@ -28,6 +65,14 @@ class ListeningRequest(BaseModel):
 class SpeakerRequest(BaseModel):
     speaker: dict[str, Any] | None = None
 
+class ServiceControlRequest(BaseModel):
+    service: str
+    action: str
+    
+class ServiceControlResponse(BaseModel):
+    service: str
+    action: str
+    status: str
 
 def create_core_api(runtime=None) -> FastAPI:
     """
@@ -208,6 +253,26 @@ def create_core_api(runtime=None) -> FastAPI:
             "model": response.model,
             "metadata": response.metadata,
         }
+
+    @app.post("/api/service")
+    async def service_control(
+        request: ServiceControlRequest,
+    ) -> dict[str, Any]:
+        try:
+            return control_luna_service(
+                service=request.service,
+                action=request.action,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc),
+            ) from exc
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=str(exc),
+            ) from exc
 
     @app.post("/api/dashboard/command")
     async def dashboard_command(
