@@ -1,317 +1,14 @@
-const REFRESH_INTERVAL = 2000;
+const REFRESH_INTERVAL = 1000;
 
-let latestDashboardState = null;
+let latestTelemetry = null;
+let lastBootId = null;
+let startupRunning = false;
+let toastTimeout = null;
 
-async function sendDashboardCommand(command) {
-    const response = await fetch(
-        "/api/dashboard/command",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(command),
-        }
-    );
 
-    if (!response.ok) {
-        let detail = "Dashboard command failed.";
-
-        try {
-            const payload = await response.json();
-
-            if (payload?.detail) {
-                detail = payload.detail;
-            }
-        } catch {
-            // Keep default error message.
-        }
-
-        throw new Error(detail);
-    }
-
-    return response.json();
-}
-
-async function applyLayout() {
-    const layout = byId("layout-select")?.value;
-
-    if (!layout) {
-        return;
-    }
-
-    const panels = [
-        "system",
-        "providers",
-        "routing",
-        "memory",
-        "activity",
-        "network",
-        "improvement",
-        "wakeword",
-    ];
-
-    try {
-        const state = await sendDashboardCommand({
-            action: "set_dashboard",
-            layout,
-            panels,
-        });
-
-        latestDashboardState = state;
-        applyDashboardState(state);
-        updateDashboardControls(state);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-async function focusPanel() {
-    const panel = byId("panel-select")?.value;
-
-    if (!panel) {
-        return;
-    }
-
-    try {
-        const state = await sendDashboardCommand({
-            action: "focus_panel",
-            panel,
-        });
-
-        latestDashboardState = state;
-        applyDashboardState(state);
-        updateDashboardControls(state);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-async function clearFocus() {
-    try {
-        const state = await sendDashboardCommand({
-            action: "clear_focus",
-        });
-
-        latestDashboardState = state;
-        applyDashboardState(state);
-        updateDashboardControls(state);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-async function askLuna(prompt) {
-    const response = await fetch(
-        "/api/ask",
-        {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                prompt,
-            }),
-        }
-    );
-
-    if (!response.ok) {
-        let detail = "L.U.N.A. request failed.";
-
-        try {
-            const payload = await response.json();
-
-            if (payload?.detail) {
-                detail = payload.detail;
-            }
-        } catch {
-            // Keep default error.
-        }
-
-        throw new Error(detail);
-    }
-
-    return response.json();
-}
-
-function addAssistantMessage(
-    role,
-    text,
-    className
-) {
-    const container = byId(
-        "assistant-messages"
-    );
-
-    if (!container) {
-        return;
-    }
-
-    const message = document.createElement("div");
-
-    message.className =
-        `assistant-message ${className}`;
-
-    const roleElement =
-        document.createElement("div");
-
-    roleElement.className =
-        "assistant-role";
-
-    roleElement.textContent =
-        role.toUpperCase();
-
-    const textElement =
-        document.createElement("div");
-
-    textElement.className =
-        "assistant-text";
-
-    textElement.textContent = text;
-
-    message.appendChild(roleElement);
-    message.appendChild(textElement);
-
-    container.appendChild(message);
-
-    container.scrollTop =
-        container.scrollHeight;
-}
-
-async function handleAssistantSubmit(event) {
-    event.preventDefault();
-
-    const input = byId(
-        "assistant-input"
-    );
-
-    if (!input) {
-        return;
-    }
-
-    const prompt = input.value.trim();
-
-    if (!prompt) {
-        return;
-    }
-
-    input.value = "";
-
-    addAssistantMessage(
-        "You",
-        prompt,
-        "user-message"
-    );
-
-    setText(
-        "assistant-status",
-        "THINKING"
-    );
-
-    try {
-        const response =
-            await askLuna(prompt);
-
-        addAssistantMessage(
-            "L.U.N.A.",
-            response.text || "No response.",
-            "luna-message"
-        );
-
-        setText(
-            "assistant-status",
-            response.provider
-                ? response.provider.toUpperCase()
-                : "READY"
-        );
-
-    } catch (error) {
-        console.error(error);
-
-        addAssistantMessage(
-            "L.U.N.A.",
-            error.message,
-            "error-message"
-        );
-
-        setText(
-            "assistant-status",
-            "ERROR"
-        );
-    }
-}
-
-async function enableAutoMode() {
-    try {
-        const state =
-            await sendDashboardCommand({
-                action: "set_auto_mode",
-                enabled: true,
-            });
-
-        latestDashboardState = state;
-
-        applyDashboardState(state);
-        updateDashboardControls(state);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
-
-function updateDashboardControls(state) {
-    if (!state) {
-        return;
-    }
-
-    setText(
-        "dashboard-mode",
-        state.automatic
-            ? `AUTO • ${state.mode?.toUpperCase() ?? "DEFAULT"}`
-            : state.mode?.toUpperCase() ?? "DEFAULT"
-    );
-
-    const layoutSelect = byId("layout-select");
-
-    if (layoutSelect && state.mode) {
-        layoutSelect.value = state.mode;
-    }
-
-    const focused = state.focused_panel;
-
-    const panelSelect = byId("panel-select");
-
-    if (panelSelect && focused) {
-        panelSelect.value = focused;
-    }
-}
-
-async function setPanelVisibility(visible) {
-    const panel = byId("panel-select")?.value;
-
-    if (!panel) {
-        return;
-    }
-
-    try {
-        const state = await sendDashboardCommand({
-            action: visible
-                ? "show_panel"
-                : "hide_panel",
-            panel,
-        });
-
-        latestDashboardState = state;
-        applyDashboardState(state);
-        updateDashboardControls(state);
-
-    } catch (error) {
-        console.error(error);
-    }
-}
+/* =========================================================
+   BASIC HELPERS
+   ========================================================= */
 
 function byId(id) {
     return document.getElementById(id);
@@ -321,494 +18,1311 @@ function setText(id, value) {
     const element = byId(id);
 
     if (element) {
-        element.textContent = value;
+        element.textContent = value ?? "";
     }
 }
 
-function formatBytes(bytes) {
-    if (bytes == null) {
-        return "—";
+function show(id) {
+    const element = byId(id);
+
+    if (element) {
+        element.classList.remove("hidden");
     }
-
-    const units = ["B", "KB", "MB", "GB", "TB"];
-    let value = bytes;
-    let index = 0;
-
-    while (value >= 1024 && index < units.length - 1) {
-        value /= 1024;
-        index++;
-    }
-
-    return `${value.toFixed(1)} ${units[index]}`;
 }
 
-function formatUptime(seconds) {
-    if (seconds == null) {
-        return "—";
+function hide(id) {
+    const element = byId(id);
+
+    if (element) {
+        element.classList.add("hidden");
     }
-
-    const total = Math.floor(seconds);
-
-    const days = Math.floor(total / 86400);
-    const hours = Math.floor((total % 86400) / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-
-    if (days > 0) {
-        return `${days}d ${hours}h`;
-    }
-
-    if (hours > 0) {
-        return `${hours}h ${minutes}m`;
-    }
-
-    return `${minutes}m`;
 }
 
-function formatLatency(seconds) {
-    if (seconds == null) {
-        return "—";
-    }
-
-    return `${seconds.toFixed(2)}s`;
-}
-
-function formatTimestamp(timestamp) {
+function formatTime(timestamp) {
     if (!timestamp) {
         return "—";
     }
 
-    return new Date(timestamp).toLocaleTimeString();
+    try {
+        return new Date(timestamp).toLocaleTimeString(
+            [],
+            {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+            }
+        );
+    } catch {
+        return "—";
+    }
 }
 
-function renderSystem(system) {
-    setText("hostname", system.host?.hostname ?? "—");
-
-    setText(
-        "cpu",
-        system.cpu?.percent != null
-            ? `${system.cpu.percent.toFixed(1)}%`
-            : "—"
-    );
-
-    setText(
-        "ram",
-        system.memory?.percent != null
-            ? `${system.memory.percent.toFixed(1)}%`
-            : "—"
-    );
-
-    setText(
-        "temperature",
-        system.temperature?.celsius != null
-            ? `${system.temperature.celsius.toFixed(1)}°C`
-            : "N/A"
-    );
-
-    setText(
-        "storage",
-        system.storage?.percent != null
-            ? `${system.storage.percent.toFixed(1)}%`
-            : "—"
-    );
-
-    setText(
-        "network",
-        system.network?.interface_online
-            ? "ONLINE"
-            : "OFFLINE"
-    );
-
-    setText(
-        "uptime",
-        formatUptime(system.uptime_seconds)
-    );
-
-    setText(
-        "network-state",
-        system.network?.interface_online
-            ? "ONLINE"
-            : "OFFLINE"
-    );
-
-    setText(
-        "network-interface",
-        system.network?.interface_online
-            ? "PRIMARY"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "network-status",
-        system.network?.interface_online
-            ? "CONNECTED"
-            : "DISCONNECTED"
-    );
-}
-
-function renderCore(core) {
-    setText("core-status", core.status?.toUpperCase() ?? "—");
-    setText("core-mode", core.mode?.toUpperCase() ?? "—");
-    setText(
-        "listening",
-        core.listening ? "YES" : "NO"
-    );
-
-    setText(
-        "session",
-        core.conversation?.active
-            ? `ACTIVE #${core.conversation.session_id}`
-            : "INACTIVE"
-    );
-
-    setText(
-        "memory-status",
-        core.memory?.available
-            ? "AVAILABLE"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "improvement-status",
-        core.improvement?.available
-            ? "AVAILABLE"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "improvement-available",
-        core.improvement?.available
-            ? "AVAILABLE"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "memory-long-term",
-        core.memory?.available
-            ? "AVAILABLE"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "memory-archive",
-        core.memory?.conversation_archive
-            ? "AVAILABLE"
-            : "UNAVAILABLE"
-    );
-
-    setText(
-        "wake-listening",
-        core.listening ? "ACTIVE" : "STANDBY"
-    );
-}
-
-function renderProviders(providers) {
-    const container = byId("providers-list");
-
-    if (!container) {
-        return;
+function formatPercent(value) {
+    if (value == null) {
+        return "—";
     }
 
-    container.innerHTML = "";
+    return `${Number(value).toFixed(0)}%`;
+}
 
-    for (const provider of providers ?? []) {
-        const wrapper = document.createElement("div");
-        wrapper.className = "provider";
 
-        const dot = document.createElement("div");
-        dot.className = "provider-dot";
+/* =========================================================
+   API
+   ========================================================= */
 
-        if (provider.healthy) {
-            dot.classList.add("healthy");
+async function getTelemetry() {
+    const response = await fetch(
+        "/api/telemetry",
+        {
+            cache: "no-store",
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Telemetry request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
+async function postJson(url, payload) {
+    const response = await fetch(
+        url,
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload),
+        }
+    );
+
+    if (!response.ok) {
+        let detail = "Request failed.";
+
+        try {
+            const body = await response.json();
+
+            if (body?.detail) {
+                detail = body.detail;
+            }
+        } catch {
+            // Keep default.
         }
 
-        const info = document.createElement("div");
-
-        const name = document.createElement("div");
-        name.className = "provider-name";
-        name.textContent = provider.name;
-
-        const model = document.createElement("div");
-        model.className = "provider-model";
-        model.textContent = provider.model ?? "No model";
-
-        info.appendChild(name);
-        info.appendChild(model);
-
-        wrapper.appendChild(dot);
-        wrapper.appendChild(info);
-
-        container.appendChild(wrapper);
+        throw new Error(detail);
     }
+
+    return response.json();
 }
 
-function renderRouting(runtimeState) {
-    const routing = runtimeState?.routing;
 
-    if (!routing) {
+/* =========================================================
+   RUNTIME STATUS
+   ========================================================= */
+
+function updateRuntimeStatus(telemetry) {
+    const dashboard = telemetry?.dashboard;
+    const state = dashboard?.state ?? "starting";
+
+    const message =
+        dashboard?.status?.message ??
+        "Initializing L.U.N.A.";
+
+    setText(
+        "runtime-state",
+        state.toUpperCase()
+    );
+
+    setText(
+        "runtime-message",
+        message
+    );
+
+    const dot = byId("runtime-status-dot");
+
+    if (!dot) {
         return;
     }
 
-    setText(
-        "routing-state",
-        routing.active ? "ACTIVE" : "IDLE"
+    dot.classList.remove(
+        "online",
+        "warning",
+        "error"
     );
 
-    setText("routing-task", routing.task ?? "—");
-    setText("routing-provider", routing.provider ?? "—");
-    setText("routing-model", routing.model ?? "—");
+    if (state === "error") {
+        dot.classList.add("error");
+        return;
+    }
 
-    setText(
-        "routing-latency",
-        formatLatency(routing.last_latency_seconds)
-    );
+    if (
+        state === "starting" ||
+        state === "thinking" ||
+        state === "working" ||
+        state === "updating" ||
+        state === "researching"
+    ) {
+        dot.classList.add("warning");
+        return;
+    }
 
-    setText(
-        "routing-fallback",
-        routing.fallback_used
-            ? `YES${routing.fallback_from ? ` (${routing.fallback_from})` : ""}`
-            : "NO"
-    );
+    if (
+        state === "idle" ||
+        state === "listening" ||
+        state === "speaking"
+    ) {
+        dot.classList.add("online");
+    }
 }
 
-function renderActivity(activity) {
-    const container = byId("activity-list");
+
+/* =========================================================
+   CANVAS STATE
+   ========================================================= */
+
+const STATE_VIEWS = {
+    starting: "canvas-boot",
+    idle: "canvas-idle",
+    listening: "canvas-listening",
+    thinking: "canvas-thinking",
+    speaking: "canvas-speaking",
+    working: "canvas-working",
+    updating: "canvas-updating",
+    researching: "canvas-researching",
+};
+
+function hideAllStateViews() {
+    for (const id of Object.values(STATE_VIEWS)) {
+        hide(id);
+    }
+
+    hide("canvas-presentation");
+}
+
+function showStateView(state) {
+    hideAllStateViews();
+
+    const viewId =
+        STATE_VIEWS[state] ??
+        STATE_VIEWS.idle;
+
+    show(viewId);
+}
+
+function renderState(state, message) {
+    showStateView(state);
+
+    switch (state) {
+        case "thinking":
+            setText(
+                "thinking-message",
+                message || "Processing"
+            );
+            break;
+
+        case "speaking":
+            setText(
+                "speaking-message",
+                message || "Speaking"
+            );
+            break;
+
+        case "working":
+            setText(
+                "working-message",
+                message || "Working"
+            );
+            break;
+
+        case "updating":
+            setText(
+                "update-message",
+                message || "Applying update"
+            );
+            break;
+
+        case "researching":
+            setText(
+                "research-message",
+                message || "Searching"
+            );
+            break;
+
+        case "idle":
+            setText(
+                "idle-state-text",
+                "READY"
+            );
+
+            setText(
+                "idle-subtext",
+                "L.U.N.A. ONLINE"
+            );
+            break;
+
+        case "listening":
+            setText(
+                "idle-state-text",
+                "LISTENING"
+            );
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+/* =========================================================
+   DYNAMIC PRESENTATIONS
+   ========================================================= */
+
+function clearPresentation() {
+    const container = byId(
+        "canvas-presentation"
+    );
 
     if (!container) {
         return;
     }
 
-    setText("activity-count", activity?.count ?? 0);
-
     container.innerHTML = "";
-
-    for (const event of (activity?.events ?? []).slice(0, 10)) {
-        const item = document.createElement("div");
-        item.className = "activity-item";
-
-        const main = document.createElement("div");
-        main.className = "activity-main";
-
-        const message = document.createElement("div");
-        message.className = "activity-message";
-        message.textContent = event.message;
-
-        const time = document.createElement("div");
-        time.className = "activity-meta";
-        time.textContent = formatTimestamp(event.timestamp);
-
-        main.appendChild(message);
-        main.appendChild(time);
-
-        const meta = document.createElement("div");
-        meta.className = "activity-meta";
-
-        const details = [
-            event.task,
-            event.provider,
-            event.model,
-            event.latency_seconds != null
-                ? formatLatency(event.latency_seconds)
-                : null,
-        ].filter(Boolean);
-
-        meta.textContent = details.join(" • ");
-
-        item.appendChild(main);
-        item.appendChild(meta);
-
-        container.appendChild(item);
-    }
 }
 
-function renderAlerts(alerts) {
-    const container = byId("alerts-list");
+function createElement(
+    tag,
+    className,
+    text
+) {
+    const element =
+        document.createElement(tag);
+
+    if (className) {
+        element.className = className;
+    }
+
+    if (text != null) {
+        element.textContent = text;
+    }
+
+    return element;
+}
+
+function renderPresentation(
+    presentation
+) {
+    const container = byId(
+        "canvas-presentation"
+    );
 
     if (!container) {
         return;
     }
 
-    const visibleAlerts = alerts ?? [];
+    const type =
+        presentation?.type ?? "idle";
 
-    setText("alert-count", visibleAlerts.length);
+    const data =
+        presentation?.data ?? {};
 
-    container.innerHTML = "";
-
-    for (const alert of visibleAlerts) {
-        const item = document.createElement("div");
-
-        item.className = `alert ${alert.severity ?? "info"}`;
-
-        const message = document.createElement("div");
-        message.className = "alert-message";
-        message.textContent = alert.message;
-
-        const time = document.createElement("div");
-        time.className = "alert-time";
-        time.textContent = formatTimestamp(alert.timestamp);
-
-        item.appendChild(message);
-        item.appendChild(time);
-
-        container.appendChild(item);
+    if (
+        !type ||
+        type === "idle" ||
+        type === "none"
+    ) {
+        return false;
     }
+
+    clearPresentation();
+
+    switch (type) {
+        case "weather":
+            renderWeather(
+                container,
+                data
+            );
+            break;
+
+        case "forecast":
+            renderForecast(
+                container,
+                data
+            );
+            break;
+
+        case "progress":
+            renderProgress(
+                container,
+                data
+            );
+            break;
+
+        case "search":
+            renderSearch(
+                container,
+                data
+            );
+            break;
+
+        case "calendar":
+            renderCalendar(
+                container,
+                data
+            );
+            break;
+
+        case "alert":
+            renderPresentationAlert(
+                container,
+                data
+            );
+            break;
+
+        default:
+            renderGenericPresentation(
+                container,
+                type,
+                data
+            );
+            break;
+    }
+
+    hideAllStateViews();
+    show("canvas-presentation");
+
+    return true;
 }
 
-function applyDashboardState(state) {
-    if (!state) {
-        return;
-    }
 
-    latestDashboardState = state;
+/* =========================================================
+   WEATHER
+   ========================================================= */
 
-    const panels = state.panels ?? {};
+function renderWeather(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card weather-card"
+        );
 
-    for (const [panelId, panel] of Object.entries(panels)) {
-        const element = byId(`${panelId}-panel`);
+    const location =
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            data.location ?? "WEATHER"
+        );
 
-        if (!element) {
+    const temperature =
+        createElement(
+            "div",
+            "weather-temperature",
+            data.temperature != null
+                ? `${data.temperature}°`
+                : "—"
+        );
+
+    const condition =
+        createElement(
+            "div",
+            "weather-condition",
+            data.condition ?? "Current conditions"
+        );
+
+    const details =
+        createElement(
+            "div",
+            "weather-details"
+        );
+
+    const values = [
+        ["FEELS", data.feels_like],
+        ["HUMIDITY", data.humidity],
+        ["WIND", data.wind],
+    ];
+
+    for (const [label, value] of values) {
+        if (value == null) {
             continue;
         }
 
-        element.classList.toggle(
-            "hidden",
-            panel.visible === false
+        const item =
+            createElement(
+                "div",
+                "weather-detail"
+            );
+
+        item.appendChild(
+            createElement(
+                "span",
+                "weather-detail-label",
+                label
+            )
         );
 
-        element.classList.toggle(
-            "focused",
-            panelId === state.focused_panel
+        item.appendChild(
+            createElement(
+                "span",
+                "weather-detail-value",
+                String(value)
+            )
         );
 
-        element.dataset.priority = String(
-            panel.priority ?? 0
-        );
+        details.appendChild(item);
     }
 
-    if (state.mode) {
-        document.body.dataset.dashboardMode = state.mode;
-    }
+    wrapper.appendChild(location);
+    wrapper.appendChild(temperature);
+    wrapper.appendChild(condition);
+    wrapper.appendChild(details);
 
-    updateDashboardControls(state);
+    container.appendChild(wrapper);
 }
 
-async function loadTelemetry() {
-    try {
-        const response = await fetch(
-            "/api/telemetry",
-            { cache: "no-store" }
+
+/* =========================================================
+   FORECAST
+   ========================================================= */
+
+function renderForecast(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card forecast-card"
         );
 
-        if (!response.ok) {
-            throw new Error(
-                `Telemetry request failed: ${response.status}`
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            data.location ?? "FORECAST"
+        )
+    );
+
+    const title =
+        createElement(
+            "div",
+            "presentation-title",
+            data.title ?? "Forecast"
+        );
+
+    wrapper.appendChild(title);
+
+    const days =
+        createElement(
+            "div",
+            "forecast-days"
+        );
+
+    for (
+        const day of data.days ?? []
+    ) {
+        const item =
+            createElement(
+                "div",
+                "forecast-day"
+            );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "forecast-day-name",
+                day.day ?? "—"
+            )
+        );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "forecast-day-condition",
+                day.condition ?? ""
+            )
+        );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "forecast-day-temp",
+                day.temperature ?? "—"
+            )
+        );
+
+        days.appendChild(item);
+    }
+
+    wrapper.appendChild(days);
+    container.appendChild(wrapper);
+}
+
+
+/* =========================================================
+   PROGRESS
+   ========================================================= */
+
+function renderProgress(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card progress-card"
+        );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            data.label ?? "L.U.N.A."
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-title",
+            data.title ?? "Working"
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-caption",
+            data.message ?? ""
+        )
+    );
+
+    const progress =
+        createElement(
+            "div",
+            "presentation-progress"
+        );
+
+    const bar =
+        createElement(
+            "div",
+            "presentation-progress-bar"
+        );
+
+    const percent =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                Number(data.percent ?? 0)
+            )
+        );
+
+    bar.style.width =
+        `${percent}%`;
+
+    progress.appendChild(bar);
+    wrapper.appendChild(progress);
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-percent",
+            `${Math.round(percent)}%`
+        )
+    );
+
+    container.appendChild(wrapper);
+}
+
+
+/* =========================================================
+   SEARCH
+   ========================================================= */
+
+function renderSearch(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card search-card"
+        );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            "RESEARCH"
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-title",
+            data.query ?? "Search"
+        )
+    );
+
+    const results =
+        createElement(
+            "div",
+            "search-results"
+        );
+
+    for (
+        const result of data.results ?? []
+    ) {
+        const item =
+            createElement(
+                "div",
+                "search-result"
+            );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "search-result-title",
+                result.title ?? "Result"
+            )
+        );
+
+        if (result.description) {
+            item.appendChild(
+                createElement(
+                    "div",
+                    "search-result-description",
+                    result.description
+                )
             );
         }
 
-        const telemetry = await response.json();
+        results.appendChild(item);
+    }
 
-        byId("connection-dot")?.classList.add("online");
-        byId("connection-dot")?.classList.remove("offline");
-        setText("connection-text", "CORE ONLINE");
-
-        renderSystem(telemetry.system);
-        renderCore(telemetry.core);
-        renderProviders(telemetry.core?.providers);
-        renderRouting(telemetry.runtime_state);
-        renderActivity(telemetry.activity);
-        renderAlerts(telemetry.dashboard?.alerts);
+    wrapper.appendChild(results);
+    container.appendChild(wrapper);
+}
 
 
-        applyDashboardState(telemetry.dashboard);
+/* =========================================================
+   CALENDAR
+   ========================================================= */
 
-        setText(
-            "last-update",
-            `Updated ${formatTimestamp(telemetry.timestamp)}`
+function renderCalendar(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card calendar-card"
+        );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            "CALENDAR"
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-title",
+            data.title ?? "Upcoming"
+        )
+    );
+
+    const events =
+        createElement(
+            "div",
+            "calendar-events"
+        );
+
+    for (
+        const event of data.events ?? []
+    ) {
+        const item =
+            createElement(
+                "div",
+                "calendar-event"
+            );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "calendar-event-time",
+                event.time ?? ""
+            )
+        );
+
+        item.appendChild(
+            createElement(
+                "div",
+                "calendar-event-name",
+                event.title ?? "Event"
+            )
+        );
+
+        events.appendChild(item);
+    }
+
+    wrapper.appendChild(events);
+    container.appendChild(wrapper);
+}
+
+
+/* =========================================================
+   ALERT PRESENTATION
+   ========================================================= */
+
+function renderPresentationAlert(
+    container,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            `presentation-card presentation-alert ${data.severity ?? "info"}`
+        );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            data.severity
+                ? data.severity.toUpperCase()
+                : "ALERT"
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-title",
+            data.title ?? "L.U.N.A."
+        )
+    );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-caption",
+            data.message ?? ""
+        )
+    );
+
+    container.appendChild(wrapper);
+}
+
+
+/* =========================================================
+   GENERIC PRESENTATION
+   ========================================================= */
+
+function renderGenericPresentation(
+    container,
+    type,
+    data
+) {
+    const wrapper =
+        createElement(
+            "div",
+            "presentation-card"
+        );
+
+    wrapper.appendChild(
+        createElement(
+            "div",
+            "presentation-eyebrow",
+            type.toUpperCase()
+        )
+    );
+
+    if (data.title) {
+        wrapper.appendChild(
+            createElement(
+                "div",
+                "presentation-title",
+                data.title
+            )
+        );
+    }
+
+    if (data.message) {
+        wrapper.appendChild(
+            createElement(
+                "div",
+                "presentation-caption",
+                data.message
+            )
+        );
+    }
+
+    container.appendChild(wrapper);
+}
+
+
+/* =========================================================
+   BOOT SEQUENCE
+   ========================================================= */
+
+function setBootProgress(percent) {
+    const bar =
+        byId("startup-progress-bar");
+
+    if (bar) {
+        bar.style.width =
+            `${Math.max(0, Math.min(100, percent))}%`;
+    }
+
+    const bootBar =
+        byId("boot-progress-bar");
+
+    if (bootBar) {
+        bootBar.style.width =
+            `${Math.max(0, Math.min(100, percent))}%`;
+    }
+}
+
+function setBootPhase(
+    phase,
+    detail,
+    percent
+) {
+    setText(
+        "startup-phase",
+        phase
+    );
+
+    setText(
+        "startup-detail",
+        detail
+    );
+
+    setText(
+        "boot-status",
+        phase
+    );
+
+    setBootProgress(percent);
+}
+
+function hideStartupOverlay() {
+    const overlay =
+        byId("startup-overlay");
+
+    if (!overlay) {
+        return;
+    }
+
+    overlay.style.opacity = "0";
+
+    window.setTimeout(
+        () => {
+            overlay.classList.add(
+                "hidden"
+            );
+        },
+        700
+    );
+}
+
+async function runStartupSequence(
+    telemetry
+) {
+    if (startupRunning) {
+        return;
+    }
+
+    startupRunning = true;
+
+    const overlay =
+        byId("startup-overlay");
+
+    if (overlay) {
+        overlay.classList.remove(
+            "hidden"
+        );
+
+        overlay.style.opacity = "1";
+    }
+
+    const boot =
+        telemetry?.dashboard?.boot;
+
+    setBootPhase(
+        "INITIALIZING",
+        "Establishing core systems",
+        12
+    );
+
+    await wait(350);
+
+    setBootPhase(
+        "CORE",
+        "Verifying L.U.N.A. core",
+        35
+    );
+
+    await wait(350);
+
+    setBootPhase(
+        "VOICE",
+        "Checking voice systems",
+        58
+    );
+
+    await wait(350);
+
+    setBootPhase(
+        "NEURAL",
+        "Bringing intelligence online",
+        78
+    );
+
+    await wait(350);
+
+    setBootPhase(
+        "ONLINE",
+        "L.U.N.A. is ready",
+        100
+    );
+
+    await wait(500);
+
+    if (boot?.boot_id) {
+        localStorage.setItem(
+            "luna_last_boot_id",
+            boot.boot_id
+        );
+    }
+
+    hideStartupOverlay();
+
+    startupRunning = false;
+}
+
+function wait(milliseconds) {
+    return new Promise(
+        resolve =>
+            window.setTimeout(
+                resolve,
+                milliseconds
+            )
+    );
+}
+
+function shouldRunStartup(
+    telemetry
+) {
+    const bootId =
+        telemetry?.dashboard?.boot?.boot_id;
+
+    if (!bootId) {
+        return false;
+    }
+
+    const previous =
+        localStorage.getItem(
+            "luna_last_boot_id"
+        );
+
+    if (!previous) {
+        return true;
+    }
+
+    return previous !== bootId;
+}
+
+
+/* =========================================================
+   FIXED HUMAN CONTROLS
+   ========================================================= */
+
+async function toggleListening() {
+    const current =
+        latestTelemetry?.core?.listening ??
+        false;
+
+    try {
+        await postJson(
+            "/api/listening",
+            {
+                listening: !current,
+            }
+        );
+
+        showToast(
+            !current
+                ? "Listening enabled."
+                : "Listening disabled."
+        );
+
+        await refreshTelemetry();
+
+    } catch (error) {
+        showToast(
+            error.message,
+            "warning"
+        );
+    }
+}
+
+async function restartAgent() {
+    try {
+        showToast(
+            "Restarting L.U.N.A. voice agent..."
+        );
+
+        await postJson(
+            "/api/service",
+            {
+                service: "luna-agent",
+                action: "restart",
+            }
         );
 
     } catch (error) {
-        console.error(error);
-
-        byId("connection-dot")?.classList.remove("online");
-        byId("connection-dot")?.classList.add("offline");
-        setText("connection-text", "CORE OFFLINE");
+        showToast(
+            error.message,
+            "warning"
+        );
     }
 }
 
-byId("apply-layout")?.addEventListener(
-    "click",
-    applyLayout
-);
+async function reconnect() {
+    showToast(
+        "Reconnecting voice systems..."
+    );
 
-byId("show-panel")?.addEventListener(
-    "click",
-    () => setPanelVisibility(true)
-);
+    await restartAgent();
+}
 
-byId("hide-panel")?.addEventListener(
-    "click",
-    () => setPanelVisibility(false)
-);
+function updateControlState() {
+    const listening =
+        latestTelemetry?.core?.listening ??
+        false;
 
-byId("focus-panel")?.addEventListener(
-    "click",
-    focusPanel
-);
+    const button =
+        byId("listening-button");
 
-byId("clear-focus")?.addEventListener(
-    "click",
-    clearFocus
-);
+    if (button) {
+        button.classList.toggle(
+            "active",
+            listening
+        );
+    }
+}
 
-byId("assistant-form")?.addEventListener(
-    "submit",
-    handleAssistantSubmit
-);
+function wireControls() {
+    byId("listening-button")
+        ?.addEventListener(
+            "click",
+            toggleListening
+        );
 
-byId("auto-mode")?.addEventListener(
-    "click",
-    enableAutoMode
-);
+    byId("reconnect-button")
+        ?.addEventListener(
+            "click",
+            reconnect
+        );
 
-loadTelemetry();
+    byId("restart-button")
+        ?.addEventListener(
+            "click",
+            restartAgent
+        );
 
-setInterval(
-    loadTelemetry,
+    byId("mute-button")
+        ?.addEventListener(
+            "click",
+            () => {
+                showToast(
+                    "Microphone control will be connected to the voice device layer next."
+                );
+            }
+        );
+}
+
+
+/* =========================================================
+   TOASTS
+   ========================================================= */
+
+function showToast(
+    message,
+    severity = "info"
+) {
+    const toast =
+        byId("system-toast");
+
+    if (!toast) {
+        return;
+    }
+
+    setText(
+        "toast-severity",
+        severity.toUpperCase()
+    );
+
+    setText(
+        "toast-message",
+        message
+    );
+
+    toast.classList.remove(
+        "hidden"
+    );
+
+    if (toastTimeout) {
+        clearTimeout(toastTimeout);
+    }
+
+    toastTimeout =
+        window.setTimeout(
+            () => {
+                toast.classList.add(
+                    "hidden"
+                );
+            },
+            3500
+        );
+}
+
+
+/* =========================================================
+   MAIN RENDER
+   ========================================================= */
+
+function renderTelemetry(
+    telemetry
+) {
+    latestTelemetry =
+        telemetry;
+
+    updateRuntimeStatus(
+        telemetry
+    );
+
+    updateControlState();
+
+    const dashboard =
+        telemetry.dashboard ?? {};
+
+    const state =
+        dashboard.state ?? "starting";
+
+    const presentation =
+        dashboard.presentation ?? {
+            type: "idle",
+            data: {},
+        };
+
+    const presentationActive =
+        renderPresentation(
+            presentation
+        );
+
+    if (!presentationActive) {
+        renderState(
+            state,
+            dashboard.status?.message
+        );
+    }
+
+    setText(
+        "canvas-clock",
+        formatTime(
+            telemetry.timestamp
+        )
+    );
+
+    setText(
+        "canvas-connection",
+        telemetry.core?.status === "online"
+            ? "CORE ONLINE"
+            : "CORE —"
+    );
+
+    const bootId =
+        dashboard.boot?.boot_id;
+
+    if (
+        bootId &&
+        bootId !== lastBootId
+    ) {
+        lastBootId = bootId;
+
+        if (
+            shouldRunStartup(
+                telemetry
+            )
+        ) {
+            runStartupSequence(
+                telemetry
+            );
+        }
+    }
+}
+
+async function refreshTelemetry() {
+    try {
+        const telemetry =
+            await getTelemetry();
+
+        renderTelemetry(
+            telemetry
+        );
+
+    } catch (error) {
+        console.error(
+            "[L.U.N.A.] Dashboard telemetry failed:",
+            error
+        );
+
+        setText(
+            "runtime-state",
+            "OFFLINE"
+        );
+
+        setText(
+            "runtime-message",
+            "Core unavailable"
+        );
+
+        const dot =
+            byId("runtime-status-dot");
+
+        dot?.classList.remove(
+            "online",
+            "warning"
+        );
+
+        dot?.classList.add(
+            "error"
+        );
+    }
+}
+
+
+/* =========================================================
+   START
+   ========================================================= */
+
+wireControls();
+
+refreshTelemetry();
+
+window.setInterval(
+    refreshTelemetry,
     REFRESH_INTERVAL
 );
-
-document.querySelectorAll(".service-actions button").forEach((button) => {
-    button.addEventListener("click", async () => {
-        const service = button.dataset.service;
-        const action = button.dataset.action;
-
-        button.disabled = true;
-
-        try {
-            const response = await fetch("/api/service", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    service,
-                    action,
-                }),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.detail || "Service control failed");
-            }
-
-            console.log("[L.U.N.A.] Service control:", data);
-        } catch (error) {
-            console.error(
-                "[L.U.N.A.] Service control failed:",
-                error,
-            );
-        } finally {
-            button.disabled = false;
-        }
-    });
-});

@@ -2,378 +2,491 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0"
     >
-    <title>L.U.N.A. Core</title>
-    <link rel="stylesheet" href="/dashboard/style.css">
+
+    <meta
+        name="theme-color"
+        content="#07090b"
+    >
+
+    <title>L.U.N.A.</title>
+
+    <link
+        rel="stylesheet"
+        href="/dashboard/style.css"
+    >
 </head>
 
 <body>
-    <main id="dashboard" class="dashboard">
 
-        <header class="topbar">
-            <div>
-                <div class="brand">L.U.N.A.</div>
-                <div class="subtitle">CORE COMMAND CENTER</div>
+    <main id="luna-app">
+
+        <!-- =====================================================
+             FIXED COMMAND BAR
+             ===================================================== -->
+
+        <header id="command-bar">
+
+            <div class="brand-block">
+                <div class="brand-mark">
+                    L.U.N.A.
+                </div>
+
+                <div class="brand-subtitle">
+                    LOWKEY USEFUL NEURAL ASSISTANT
+                </div>
             </div>
 
-            <section id="control-panel" class="panel dashboard-controls">
-                <div class="panel-header">
-                    <h2>DASHBOARD CONTROL</h2>
-                    <span id="dashboard-mode">DEFAULT</span>
+
+            <div id="runtime-status">
+
+                <span
+                    id="runtime-status-dot"
+                    class="status-dot"
+                ></span>
+
+                <div class="runtime-status-text">
+                    <span id="runtime-state">
+                        CONNECTING
+                    </span>
+
+                    <span id="runtime-message">
+                        Initializing L.U.N.A.
+                    </span>
                 </div>
 
-                <div class="control-row">
-                    <label for="layout-select">LAYOUT</label>
-
-                    <select id="layout-select">
-                        <option value="default">Default</option>
-                        <option value="monitoring">Monitoring</option>
-                        <option value="diagnostics">Diagnostics</option>
-                        <option value="inference">Inference</option>
-                        <option value="improvement">Improvement</option>
-                        <option value="network">Network</option>
-                        <option value="memory">Memory</option>
-                        <option value="security">Security</option>
-                        <option value="idle">Idle</option>
-                        <option value="alert">Alert</option>
-                    </select>
-
-                    <button id="apply-layout">APPLY</button>
-                    <button id="auto-mode">
-                        AUTO
-                    </button>
-                </div>
-
-                <div class="control-row">
-                    <label for="panel-select">PANEL</label>
-
-                    <select id="panel-select">
-                        <option value="system">System</option>
-                        <option value="providers">Providers</option>
-                        <option value="routing">Routing</option>
-                        <option value="memory">Memory</option>
-                        <option value="activity">Activity</option>
-                        <option value="network">Network</option>
-                        <option value="improvement">Improvement</option>
-                        <option value="wakeword">Voice / Wake</option>
-                    </select>
-
-                    <button id="show-panel">SHOW</button>
-                    <button id="hide-panel">HIDE</button>
-                    <button id="focus-panel">FOCUS</button>
-                    <button id="clear-focus">CLEAR FOCUS</button>
-                </div>
-            </section>
-
-            <div class="connection">
-                <span id="connection-dot" class="status-dot"></span>
-                <span id="connection-text">CONNECTING</span>
             </div>
+
+
+            <div id="human-controls">
+
+                <button
+                    id="mute-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Mute microphone"
+                >
+                    <span class="command-icon">MIC</span>
+                    <span class="command-label">MUTE</span>
+                </button>
+
+
+                <button
+                    id="listening-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Toggle listening"
+                >
+                    <span class="command-icon">◉</span>
+                    <span class="command-label">LISTEN</span>
+                </button>
+
+
+                <button
+                    id="reconnect-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Reconnect L.U.N.A."
+                >
+                    <span class="command-icon">↻</span>
+                    <span class="command-label">RECONNECT</span>
+                </button>
+
+
+                <button
+                    id="restart-button"
+                    class="command-button danger"
+                    type="button"
+                    aria-label="Restart L.U.N.A."
+                >
+                    <span class="command-icon">⟳</span>
+                    <span class="command-label">RESTART</span>
+                </button>
+
+            </div>
+
         </header>
 
-        <section id="assistant-panel" class="panel assistant-panel">
-            <div class="panel-header">
-                <h2>L.U.N.A.</h2>
-                <span id="assistant-status">READY</span>
-            </div>
 
-            <div id="assistant-messages" class="assistant-messages">
-                <div class="assistant-message system-message">
-                    <div class="assistant-role">L.U.N.A.</div>
-                    <div class="assistant-text">
-                        Core interface ready.
-                    </div>
-                </div>
-            </div>
+        <!-- =====================================================
+             MAIN L.U.N.A. CANVAS
+             ===================================================== -->
 
-            <form id="assistant-form" class="assistant-input-row">
-                <input
-                    id="assistant-input"
-                    type="text"
-                    autocomplete="off"
-                    placeholder="Ask L.U.N.A..."
+        <section
+            id="luna-canvas"
+            aria-label="L.U.N.A. presentation canvas"
+        >
+
+            <!--
+                L.U.N.A. owns this space.
+
+                app.js will dynamically render:
+                - idle states
+                - thinking states
+                - speaking visualizations
+                - weather
+                - search results
+                - updates
+                - progress
+                - timers
+                - maps
+                - media
+                - conversations
+                - future generated UI
+            -->
+
+            <div
+                id="canvas-background"
+                aria-hidden="true"
+            ></div>
+
+
+            <div
+                id="canvas-content"
+                aria-live="polite"
+            >
+
+                <div
+                    id="canvas-boot"
+                    class="canvas-view"
                 >
 
-                <button type="submit">
-                    SEND
-                </button>
-            </form>
-        </section>
-
-        <section id="alerts-panel" class="alerts panel">
-            <div class="panel-header">
-                <h2>ALERTS</h2>
-                <span id="alert-count">0</span>
-            </div>
-
-            <div id="alerts-list" class="alerts-list"></div>
-        </section>
-
-        <section id="system-panel" class="panel">
-            <div class="panel-header">
-                <h2>SYSTEM</h2>
-                <span id="hostname">—</span>
-            </div>
-
-            <div class="metric-grid">
-                <div class="metric">
-                    <span>CPU</span>
-                    <strong id="cpu">—</strong>
-                </div>
-
-                <div class="metric">
-                    <span>RAM</span>
-                    <strong id="ram">—</strong>
-                </div>
-
-                <div class="metric">
-                    <span>TEMPERATURE</span>
-                    <strong id="temperature">—</strong>
-                </div>
-
-                <div class="metric">
-                    <span>STORAGE</span>
-                    <strong id="storage">—</strong>
-                </div>
-
-                <div class="metric">
-                    <span>NETWORK</span>
-                    <strong id="network">—</strong>
-                </div>
-
-                <div class="metric">
-                    <span>UPTIME</span>
-                    <strong id="uptime">—</strong>
-                </div>
-            </div>
-        </section>
-
-        <section id="services-panel" class="panel">
-            <div class="panel-header">
-                <h2>SERVICES</h2>
-                <span id="services-state">—</span>
-            </div>
-
-            <div class="service-list">
-
-                <div class="service-row">
-                    <div>
-                        <strong>L.U.N.A. CORE</strong>
-                        <span id="service-luna-core">—</span>
+                    <div class="boot-mark">
+                        L.U.N.A.
                     </div>
 
-                    <div class="service-actions">
-                        <button data-service="luna-core" data-action="start">START</button>
-                        <button data-service="luna-core" data-action="stop">STOP</button>
-                        <button data-service="luna-core" data-action="restart">RESTART</button>
-                    </div>
-                </div>
-
-                <div class="service-row">
-                    <div>
-                        <strong>L.U.N.A. AGENT</strong>
-                        <span id="service-luna-agent">—</span>
+                    <div
+                        id="boot-status"
+                        class="boot-status"
+                    >
+                        INITIALIZING
                     </div>
 
-                    <div class="service-actions">
-                        <button data-service="luna-agent" data-action="start">START</button>
-                        <button data-service="luna-agent" data-action="stop">STOP</button>
-                        <button data-service="luna-agent" data-action="restart">RESTART</button>
-                    </div>
-                </div>
-
-                <div class="service-row">
-                    <div>
-                        <strong>KOKORO TTS</strong>
-                        <span id="service-kokoro">—</span>
+                    <div
+                        id="boot-progress"
+                        class="boot-progress"
+                    >
+                        <div
+                            id="boot-progress-bar"
+                            class="boot-progress-bar"
+                        ></div>
                     </div>
 
-                    <div class="service-actions">
-                        <button data-service="kokoro" data-action="start">START</button>
-                        <button data-service="kokoro" data-action="stop">STOP</button>
-                        <button data-service="kokoro" data-action="restart">RESTART</button>
+                </div>
+
+
+                <div
+                    id="canvas-idle"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="idle-orb"></div>
+
+                    <div class="idle-text">
+                        <span id="idle-state-text">
+                            READY
+                        </span>
+
+                        <span id="idle-subtext">
+                            L.U.N.A. ONLINE
+                        </span>
                     </div>
+
                 </div>
 
-                <div class="service-row">
-                    <div>
-                        <strong>OLLAMA</strong>
-                        <span id="service-ollama">—</span>
+
+                <div
+                    id="canvas-thinking"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="thinking-core">
+                        <div class="thinking-ring ring-one"></div>
+                        <div class="thinking-ring ring-two"></div>
+                        <div class="thinking-ring ring-three"></div>
+                        <div class="thinking-center"></div>
                     </div>
 
-                    <div class="service-actions">
-                        <button data-service="ollama" data-action="start">START</button>
-                        <button data-service="ollama" data-action="stop">STOP</button>
-                        <button data-service="ollama" data-action="restart">RESTART</button>
+                    <div class="thinking-label">
+                        THINKING
                     </div>
+
+                    <div
+                        id="thinking-message"
+                        class="canvas-caption"
+                    >
+                        Processing
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="canvas-speaking"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="voice-visualizer">
+
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+
+                    </div>
+
+                    <div class="speaking-label">
+                        L.U.N.A.
+                    </div>
+
+                    <div
+                        id="speaking-message"
+                        class="canvas-caption"
+                    >
+                        Speaking
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="canvas-listening"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="listening-indicator">
+
+                        <div class="listening-core"></div>
+
+                        <div class="listening-ring"></div>
+
+                    </div>
+
+                    <div class="listening-label">
+                        LISTENING
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="canvas-working"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="working-indicator">
+
+                        <div class="working-line"></div>
+                        <div class="working-line"></div>
+                        <div class="working-line"></div>
+
+                    </div>
+
+                    <div class="working-label">
+                        WORKING
+                    </div>
+
+                    <div
+                        id="working-message"
+                        class="canvas-caption"
+                    >
+                        Working
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="canvas-updating"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="update-container">
+
+                        <div class="update-label">
+                            L.U.N.A. UPDATE
+                        </div>
+
+                        <div
+                            id="update-message"
+                            class="canvas-caption"
+                        >
+                            Applying update
+                        </div>
+
+                        <div class="update-progress">
+
+                            <div
+                                id="update-progress-bar"
+                                class="update-progress-bar"
+                            ></div>
+
+                        </div>
+
+                        <div
+                            id="update-percent"
+                            class="update-percent"
+                        >
+                            0%
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="canvas-researching"
+                    class="canvas-view hidden"
+                >
+
+                    <div class="research-indicator">
+
+                        <div class="research-orbit"></div>
+
+                        <div class="research-core"></div>
+
+                    </div>
+
+                    <div class="research-label">
+                        RESEARCHING
+                    </div>
+
+                    <div
+                        id="research-message"
+                        class="canvas-caption"
+                    >
+                        Searching
+                    </div>
+
+                </div>
+
+
+                <!--
+                    Generic presentation container.
+
+                    This is where future L.U.N.A.-controlled
+                    visual objects will be mounted.
+                -->
+
+                <div
+                    id="canvas-presentation"
+                    class="canvas-view hidden"
+                ></div>
+
+            </div>
+
+
+            <!-- =================================================
+                 CANVAS OVERLAY / SUBTLE SYSTEM INFORMATION
+                 ================================================= -->
+
+            <div
+                id="canvas-overlay"
+                aria-hidden="true"
+            >
+
+                <div
+                    id="canvas-clock"
+                    class="overlay-item"
+                >
+                    —
+                </div>
+
+                <div
+                    id="canvas-connection"
+                    class="overlay-item"
+                >
+                    CORE —
                 </div>
 
             </div>
+
         </section>
 
-        <section id="network-panel" class="panel">
-            <div class="panel-header">
-                <h2>NETWORK</h2>
-                <span id="network-state">—</span>
+
+        <!-- =====================================================
+             BOOT / RESTART OVERLAY
+             ===================================================== -->
+
+        <div
+            id="startup-overlay"
+            class="startup-overlay hidden"
+            aria-hidden="true"
+        >
+
+            <div class="startup-content">
+
+                <div class="startup-logo">
+                    L.U.N.A.
+                </div>
+
+                <div
+                    id="startup-phase"
+                    class="startup-phase"
+                >
+                    INITIALIZING
+                </div>
+
+                <div
+                    id="startup-detail"
+                    class="startup-detail"
+                >
+                    Establishing core systems
+                </div>
+
+                <div class="startup-progress">
+
+                    <div
+                        id="startup-progress-bar"
+                        class="startup-progress-bar"
+                    ></div>
+
+                </div>
+
             </div>
 
-            <div class="info-grid">
-                <div>
-                    <span>INTERFACE</span>
-                    <strong id="network-interface">—</strong>
-                </div>
+        </div>
 
-                <div>
-                    <span>STATUS</span>
-                    <strong id="network-status">—</strong>
-                </div>
-            </div>
-        </section>
 
-        <section id="core-panel" class="panel">
-            <div class="panel-header">
-                <h2>CORE</h2>
-                <span id="core-status">—</span>
-            </div>
+        <!-- =====================================================
+             SYSTEM ALERT TOAST
+             ===================================================== -->
 
-            <div class="info-grid">
-                <div>
-                    <span>MODE</span>
-                    <strong id="core-mode">—</strong>
-                </div>
+        <div
+            id="system-toast"
+            class="system-toast hidden"
+            role="status"
+            aria-live="polite"
+        >
 
-                <div>
-                    <span>LISTENING</span>
-                    <strong id="listening">—</strong>
-                </div>
-
-                <div>
-                    <span>SESSION</span>
-                    <strong id="session">—</strong>
-                </div>
-
-                <div>
-                    <span>MEMORY</span>
-                    <strong id="memory-status">—</strong>
-                </div>
-
-                <div>
-                    <span>IMPROVEMENT</span>
-                    <strong id="improvement-status">—</strong>
-                </div>
-            </div>
-        </section>
-
-        <section id="providers-panel" class="panel">
-            <div class="panel-header">
-                <h2>PROVIDERS</h2>
+            <div
+                id="toast-severity"
+                class="toast-severity"
+            >
+                INFO
             </div>
 
-            <div id="providers-list" class="provider-list"></div>
-        </section>
+            <div
+                id="toast-message"
+                class="toast-message"
+            ></div>
 
-        <section id="routing-panel" class="panel">
-            <div class="panel-header">
-                <h2>ROUTING</h2>
-                <span id="routing-state">IDLE</span>
-            </div>
-
-            <div class="info-grid">
-                <div>
-                    <span>TASK</span>
-                    <strong id="routing-task">—</strong>
-                </div>
-
-                <div>
-                    <span>PROVIDER</span>
-                    <strong id="routing-provider">—</strong>
-                </div>
-
-                <div>
-                    <span>MODEL</span>
-                    <strong id="routing-model">—</strong>
-                </div>
-
-                <div>
-                    <span>LATENCY</span>
-                    <strong id="routing-latency">—</strong>
-                </div>
-
-                <div>
-                    <span>FALLBACK</span>
-                    <strong id="routing-fallback">—</strong>
-                </div>
-            </div>
-        </section>
-
-        <section id="memory-panel" class="panel">
-            <div class="panel-header">
-                <h2>MEMORY</h2>
-            </div>
-
-            <div class="info-grid">
-                <div>
-                    <span>LONG-TERM MEMORY</span>
-                    <strong id="memory-long-term">AVAILABLE</strong>
-                </div>
-
-                <div>
-                    <span>CONVERSATION ARCHIVE</span>
-                    <strong id="memory-archive">AVAILABLE</strong>
-                </div>
-            </div>
-        </section>
-
-        <section id="activity-panel" class="panel">
-            <div class="panel-header">
-                <h2>RECENT ACTIVITY</h2>
-                <span id="activity-count">0</span>
-            </div>
-
-            <div id="activity-list" class="activity-list"></div>
-        </section>
-
-        <section id="improvement-panel" class="panel">
-            <div class="panel-header">
-                <h2>SELF-IMPROVEMENT</h2>
-            </div>
-
-            <div class="info-grid">
-                <div>
-                    <span>STATUS</span>
-                    <strong id="improvement-available">AVAILABLE</strong>
-                </div>
-            </div>
-        </section>
-
-        <section id="wakeword-panel" class="panel">
-            <div class="panel-header">
-                <h2>VOICE / WAKE</h2>
-            </div>
-
-            <div class="info-grid">
-                <div>
-                    <span>WAKEWORD</span>
-                    <strong id="wakeword-status">—</strong>
-                </div>
-
-                <div>
-                    <span>LISTENING</span>
-                    <strong id="wake-listening">—</strong>
-                </div>
-            </div>
-        </section>
-
-        <footer>
-            <span>L.U.N.A. Core</span>
-            <span id="last-update">—</span>
-        </footer>
+        </div>
 
     </main>
 
+
     <script src="/dashboard/app.js"></script>
+
 </body>
 </html>

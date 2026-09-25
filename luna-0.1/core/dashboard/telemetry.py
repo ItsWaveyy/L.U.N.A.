@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from core.orchestrator import LunaCore
-from core.system.monitor import SystemMonitor
-from core.dashboard.state import DashboardStateManager
 from core.dashboard.activity import ActivityManager
 from core.dashboard.runtime_state import CoreRuntimeState
+from core.dashboard.state import DashboardStateManager
 from core.dashboard.voice_state import VoiceRuntimeState
+from core.orchestrator import LunaCore
+from core.system.monitor import SystemMonitor
 
 
 class DashboardTelemetry:
@@ -27,7 +27,7 @@ class DashboardTelemetry:
         dashboard: DashboardStateManager,
         activity: ActivityManager,
         runtime_state: CoreRuntimeState,
-        voice_state: VoiceRuntimeState
+        voice_state: VoiceRuntimeState,
     ) -> None:
         self.core = core
         self.system_monitor = system_monitor
@@ -42,17 +42,11 @@ class DashboardTelemetry:
 
         return {
             "timestamp": datetime.now(timezone.utc).isoformat(),
-
             "system": system,
-
             "core": status,
-
             "activity": self.activity.snapshot(),
-
             "runtime_state": self.runtime_state.snapshot(),
-
             "dashboard": self.dashboard.snapshot(),
-
             "voice": self.voice_state.snapshot(),
         }
 
@@ -78,13 +72,8 @@ class DashboardTelemetry:
 
         return {
             "status": "online",
-
-            "mode": self._get_mode(),
-
             "listening": self.core.listening,
-
             "providers": providers,
-
             "conversation": {
                 "active": (
                     self.core.conversations.session_id
@@ -94,24 +83,13 @@ class DashboardTelemetry:
                     self.core.conversations.session_id
                 ),
             },
-
             "memory": self._memory_status(),
-
             "improvement": {
                 "available": (
                     self.core.improvement is not None
                 ),
             },
         }
-
-    def _get_mode(self) -> str:
-        """
-        Return the currently configured L.U.N.A. operating mode.
-        """
-
-        from config import LUNA_MODE
-
-        return LUNA_MODE
 
     def _memory_status(self) -> dict[str, Any]:
         """

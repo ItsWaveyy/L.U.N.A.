@@ -4,45 +4,34 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from threading import Lock
 from typing import Any
+from uuid import uuid4
 
 
-VALID_MODES = {
-    "default",
-    "monitoring",
-    "diagnostics",
-    "inference",
-    "improvement",
-    "network",
-    "memory",
-    "security",
+VALID_STATES = {
+    "starting",
     "idle",
-    "alert",
+    "listening",
+    "thinking",
+    "speaking",
+    "working",
+    "updating",
+    "researching",
+    "error",
 }
 
-VALID_PRIORITIES = {
-    "low": 0,
-    "normal": 0,
-    "high": 1,
-    "critical": 2,
+VALID_SEVERITIES = {
+    "info",
+    "warning",
+    "critical",
 }
 
-DEFAULT_PANELS = (
-    "system",
-    "providers",
-    "routing",
-    "memory",
-    "activity",
-    "network",
-    "improvement",
-    "wakeword",
-)
-
-
-@dataclass
-class DashboardPanel:
-    id: str
-    visible: bool = True
-    priority: int = 0
+VALID_TRANSITIONS = {
+    "replace",
+    "fade",
+    "slide",
+    "scale",
+    "none",
+}
 
 
 @dataclass
@@ -57,41 +46,53 @@ class DashboardStateManager:
     Owns the presentation state of the L.U.N.A. dashboard.
 
     Core owns system truth.
-    DashboardStateManager owns how that truth should be presented.
+    DashboardStateManager owns what L.U.N.A. wants the interface
+    to communicate right now.
 
-    L.U.N.A. can eventually manipulate this same state through
-    validated dashboard commands.
+    The frontend is responsible for rendering this state.
     """
 
     def __init__(self) -> None:
         self._lock = Lock()
-        self.mode = "default"
-        self.automatic = True
-        self.focused_panel: str | None = None
-        self.last_updated = self._timestamp()
 
-        self.panels: dict[str, DashboardPanel] = {
-            panel_id: DashboardPanel(id=panel_id)
-            for panel_id in DEFAULT_PANELS
+        now = self._timestamp()
+
+        self.state = "starting"
+        self.status_message = "Initializing L.U.N.A."
+
+        self.presentation: dict[str, Any] = {
+            "type": "idle",
+            "data": {},
+            "transition": "replace",
         }
 
+        self.boot: dict[str, str] = {
+            "boot_id": uuid4().hex,
+            "started_at": now,
+        }
+
+        self.last_updated = now
         self.alerts: list[DashboardAlert] = []
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
-                "mode": self.mode,
-                "focused_panel": self.focused_panel,
-                "last_updated": self.last_updated,
-                "panels": {
-                    panel_id: asdict(panel)
-                    for panel_id, panel in self.panels.items()
+                "state": self.state,
+                "status": {
+                    "state": self.state,
+                    "message": self.status_message,
                 },
+                "presentation": {
+                    "type": self.presentation["type"],
+                    "data": dict(self.presentation["data"]),
+                    "transition": self.presentation["transition"],
+                },
+                "boot": dict(self.boot),
                 "alerts": [
                     asdict(alert)
                     for alert in self.alerts
                 ],
-                "automatic": self.automatic,
+                "last_updated": self.last_updated,
             }
 
     def apply_command(
@@ -103,27 +104,18 @@ class DashboardStateManager:
         action = str(command.get("action", "")).strip().lower()
 
         if not action:
-            raise ValueError("Dashboard command requires an action.")
+            raise ValueError(
+                "Dashboard command requires an action."
+            )
 
-        if action == "set_dashboard":
-            self._set_dashboard(command)
+        if action == "set_state":
+            self._set_state(command)
 
-        elif action == "show_panel":
-            self._set_panel_visibility(command, visible=True)
+        elif action == "set_presentation":
+            self._set_presentation(command)
 
-        elif action == "hide_panel":
-            self._set_panel_visibility(command, visible=False)
-
-        elif action == "focus_panel":
-            self._focus_panel(command)
-
-        elif action == "clear_focus":
-            with self._lock:
-                self.focused_panel = None
-                self._touch()
-
-        elif action == "set_priority":
-            self._set_priority(command)
+        elif action == "clear_presentation":
+            self._clear_presentation()
 
         elif action == "show_alert":
             self._show_alert(command)
@@ -131,101 +123,96 @@ class DashboardStateManager:
         elif action == "clear_alert":
             self._clear_alert(command)
 
-        elif action == "set_auto_mode":
-            self._set_auto_mode(command)
+        elif action == "begin_boot":
+            self._begin_boot()
+
+        elif action == "complete_boot":
+            self._complete_boot()
 
         else:
-            raise ValueError(f"Unknown dashboard action: {action}")
+            raise ValueError(
+                f"Unknown dashboard action: {action}"
+            )
 
         if timestamp is not None:
             with self._lock:
                 self.last_updated = timestamp
 
-    def _set_dashboard(self, command: dict[str, Any]) -> None:
-        layout = str(command.get("layout", "")).strip().lower()
-        panels = command.get("panels")
-
-        if layout not in VALID_MODES:
-            raise ValueError(
-                f"Invalid dashboard layout: {layout}"
-            )
-
-        if not isinstance(panels, list) or not panels:
-            raise ValueError(
-                "set_dashboard requires a non-empty panels list."
-            )
-
-        requested_panels = {
-            str(panel).strip().lower()
-            for panel in panels
-            if str(panel).strip()
-        }
-
-        unknown = requested_panels - self.panels.keys()
-
-        if unknown:
-            raise ValueError(
-                f"Unknown dashboard panels: {sorted(unknown)}"
-            )
-
-        with self._lock:
-            self.mode = layout
-
-            self.automatic = False
-
-            for panel_id, panel in self.panels.items():
-                panel.visible = panel_id in requested_panels
-
-            if (
-                self.focused_panel is not None
-                and self.focused_panel not in requested_panels
-            ):
-                self.focused_panel = None
-
-            self._touch()
-
-    def _set_panel_visibility(
+    def _set_state(
         self,
         command: dict[str, Any],
-        *,
-        visible: bool,
     ) -> None:
-        panel = self._require_panel(command)
-
-        with self._lock:
-            self.panels[panel].visible = visible
-
-            if not visible and self.focused_panel == panel:
-                self.focused_panel = None
-
-            self._touch()
-
-    def _focus_panel(self, command: dict[str, Any]) -> None:
-        panel = self._require_panel(command)
-
-        with self._lock:
-            self.panels[panel].visible = True
-            self.focused_panel = panel
-            self._touch()
-
-    def _set_priority(self, command: dict[str, Any]) -> None:
-        panel = self._require_panel(command)
-
-        priority_name = (
-            str(command.get("priority", "normal"))
+        state = (
+            str(command.get("state", ""))
             .strip()
             .lower()
         )
 
-        if priority_name not in VALID_PRIORITIES:
+        if state not in VALID_STATES:
             raise ValueError(
-                f"Invalid panel priority: {priority_name}"
+                f"Invalid dashboard state: {state}"
+            )
+
+        message = command.get("message")
+
+        with self._lock:
+            self.state = state
+
+            if message is not None:
+                self.status_message = str(message).strip()
+
+            self._touch()
+
+    def _set_presentation(
+        self,
+        command: dict[str, Any],
+    ) -> None:
+        presentation_type = (
+            str(command.get("type", ""))
+            .strip()
+            .lower()
+        )
+
+        if not presentation_type:
+            raise ValueError(
+                "set_presentation requires a type."
+            )
+
+        data = command.get("data", {})
+
+        if not isinstance(data, dict):
+            raise ValueError(
+                "set_presentation data must be an object."
+            )
+
+        transition = (
+            str(command.get("transition", "replace"))
+            .strip()
+            .lower()
+        )
+
+        if transition not in VALID_TRANSITIONS:
+            raise ValueError(
+                f"Invalid presentation transition: {transition}"
             )
 
         with self._lock:
-            self.panels[panel].priority = VALID_PRIORITIES[
-                priority_name
-            ]
+            self.presentation = {
+                "type": presentation_type,
+                "data": dict(data),
+                "transition": transition,
+            }
+
+            self._touch()
+
+    def _clear_presentation(self) -> None:
+        with self._lock:
+            self.presentation = {
+                "type": "idle",
+                "data": {},
+                "transition": "fade",
+            }
+
             self._touch()
 
     def add_alert(
@@ -235,16 +222,10 @@ class DashboardStateManager:
         message: str,
         timestamp: str | None = None,
     ) -> None:
-        """
-        Add an alert from an internal L.U.N.A. Core component.
-
-        This is the programmatic interface used by Core runtime monitoring.
-        Dashboard commands use the validated show_alert action below.
-        """
         severity = severity.strip().lower()
         message = message.strip()
 
-        if severity not in {"info", "warning", "critical"}:
+        if severity not in VALID_SEVERITIES:
             raise ValueError(
                 f"Invalid alert severity: {severity}"
             )
@@ -271,12 +252,6 @@ class DashboardStateManager:
         *,
         message: str | None = None,
     ) -> None:
-        """
-        Clear dashboard alerts from an internal L.U.N.A. Core component.
-
-        If message is provided, only matching alerts are removed.
-        Otherwise all alerts are cleared.
-        """
         message = message.strip() if message else None
 
         with self._lock:
@@ -291,7 +266,10 @@ class DashboardStateManager:
 
             self._touch()
 
-    def _show_alert(self, command: dict[str, Any]) -> None:
+    def _show_alert(
+        self,
+        command: dict[str, Any],
+    ) -> None:
         severity = (
             str(command.get("severity", "info"))
             .strip()
@@ -305,46 +283,48 @@ class DashboardStateManager:
             message=message,
         )
 
-    def _clear_alert(self, command: dict[str, Any]) -> None:
+    def _clear_alert(
+        self,
+        command: dict[str, Any],
+    ) -> None:
         message = str(command.get("message", "")).strip()
 
         self.clear_alert(
             message=message or None,
         )
 
-    def _set_auto_mode(
-        self,
-        command: dict[str, Any],
-    ) -> None:
-        enabled = command.get(
-            "enabled",
-            True,
-        )
-
-        if not isinstance(enabled, bool):
-            raise ValueError(
-                "set_auto_mode requires a boolean enabled value."
-            )
+    def _begin_boot(self) -> None:
+        now = self._timestamp()
 
         with self._lock:
-            self.automatic = enabled
+            self.boot = {
+                "boot_id": uuid4().hex,
+                "started_at": now,
+            }
+
+            self.state = "starting"
+            self.status_message = "Initializing L.U.N.A."
+
+            self.presentation = {
+                "type": "boot",
+                "data": {},
+                "transition": "replace",
+            }
+
             self._touch()
 
+    def _complete_boot(self) -> None:
+        with self._lock:
+            self.state = "idle"
+            self.status_message = "L.U.N.A. online."
 
-    def _require_panel(self, command: dict[str, Any]) -> str:
-        panel = str(command.get("panel", "")).strip().lower()
+            self.presentation = {
+                "type": "idle",
+                "data": {},
+                "transition": "fade",
+            }
 
-        if not panel:
-            raise ValueError(
-                "Dashboard command requires a panel."
-            )
-
-        if panel not in self.panels:
-            raise ValueError(
-                f"Unknown dashboard panel: {panel}"
-            )
-
-        return panel
+            self._touch()
 
     def _touch(self) -> None:
         self.last_updated = self._timestamp()

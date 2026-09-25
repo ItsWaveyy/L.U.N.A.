@@ -368,12 +368,49 @@ async def my_agent(
 
     @session.on("user_input_transcribed")
     def on_user_input_transcribed(event):
-        if event.is_final:
-            print(
-                f"[L.U.N.A.] FINAL TRANSCRIPT "
-                f"t={time.perf_counter():.6f} "
-                f"text={event.transcript!r}"
+        if not event.is_final:
+            return
+
+        print(
+            f"[L.U.N.A.] FINAL TRANSCRIPT "
+            f"t={time.perf_counter():.6f} "
+            f"text={event.transcript!r}"
+        )
+
+        asyncio.create_task(
+            luna_core.set_voice_state(
+                "thinking",
+                "Processing your request.",
             )
+        )
+
+    @session.on("agent_state_changed")
+    def on_agent_state_changed(event):
+        state_map = {
+            "initializing": ("starting", "Initializing L.U.N.A."),
+            "idle": ("idle", "Ready."),
+            "listening": ("listening", "Listening."),
+            "thinking": ("thinking", "Thinking."),
+            "speaking": ("speaking", "Speaking."),
+        }
+
+        state, message = state_map.get(
+            event.new_state,
+            ("idle", "Ready."),
+        )
+
+        asyncio.create_task(
+            luna_core.set_voice_state(state, message)
+        )
+
+    @session.on("close")
+    def on_voice_session_closed(event):
+        asyncio.create_task(
+            luna_core.set_voice_state(
+                "idle",
+                "Voice session disconnected.",
+            )
+        )
 
     # --------------------------------------------------------
     # PERSISTENT CORE ACCESS

@@ -61,6 +61,9 @@ class ConversationMessageRequest(BaseModel):
 class ListeningRequest(BaseModel):
     listening: bool
 
+class VoiceStateRequest(BaseModel):
+    state: str
+    message: str | None = None
 
 class SpeakerRequest(BaseModel):
     speaker: dict[str, Any] | None = None
@@ -68,6 +71,10 @@ class SpeakerRequest(BaseModel):
 class ServiceControlRequest(BaseModel):
     service: str
     action: str
+
+class ControlRequest(BaseModel):
+    action: str
+    payload: dict[str, Any] = {}
     
 class ServiceControlResponse(BaseModel):
     service: str
@@ -274,6 +281,35 @@ def create_core_api(runtime=None) -> FastAPI:
                 detail=str(exc),
             ) from exc
 
+    @app.post("/api/control")
+    async def control_runtime(
+        request: ControlRequest,
+    ) -> dict[str, Any]:
+        runtime = get_runtime()
+
+        action = request.action.strip().lower()
+
+        if action == "restart_service":
+            service = str(
+                request.payload.get("service", "")
+            ).strip()
+
+            if not service:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Missing service.",
+                )
+
+            return control_luna_service(
+                service,
+                "restart",
+            )
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown control action: {action}",
+        )
+
     @app.post("/api/dashboard/command")
     async def dashboard_command(
         command: dict[str, Any],
@@ -337,6 +373,36 @@ def create_core_api(runtime=None) -> FastAPI:
 
         return {
             "listening": runtime.core.listening,
+        }
+
+    @app.post("/api/voice/state")
+    async def set_voice_state(
+        request: VoiceStateRequest,
+    ) -> dict[str, Any]:
+        runtime = get_runtime()
+
+        state = request.state.strip().lower()
+
+        try:
+            runtime.dashboard.apply_command(
+                command={
+                    "action": "set_state",
+                    "state": state,
+                    "message": request.message,
+                },
+                timestamp=datetime.now(
+                    timezone.utc
+                ).isoformat(),
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc),
+            ) from exc
+
+        return {
+            "status": "updated",
+            "state": runtime.dashboard.snapshot()["state"],
         }
 
 

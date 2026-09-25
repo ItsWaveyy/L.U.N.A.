@@ -158,6 +158,24 @@ class CoreClient:
 
         return self.listening
 
+    async def set_voice_state(
+        self,
+        state: str,
+        message: str | None = None,
+    ) -> None:
+        async with httpx.AsyncClient(
+            timeout=5.0
+        ) as client:
+            response = await client.post(
+                f"{self.base_url}/api/voice/state",
+                json={
+                    "state": state,
+                    "message": message,
+                },
+            )
+
+            response.raise_for_status()
+
     async def set_speaker(
         self,
         match: Any,
@@ -206,6 +224,22 @@ class CoreClient:
             phrase in lowered
             for phrase in phrases
         )
+
+    async def control(
+        self,
+        action: str,
+        **payload,
+    ) -> dict:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                f"{self.base_url}/api/control",
+                json={
+                    "action": action,
+                    **payload,
+                },
+            )
+            response.raise_for_status()
+            return response.json()
 
 
 class CoreResponse:

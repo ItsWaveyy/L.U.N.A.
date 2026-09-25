@@ -75,6 +75,12 @@ class LunaCoreRuntime:
     async def start(self) -> None:
         logger.info("[L.U.N.A.] Core runtime starting...")
 
+        self.dashboard.apply_command(
+            command={
+                "action": "begin_boot",
+            }
+        )
+
         self.core.conversations.start_session()
 
         self.dashboard.add_alert(
@@ -88,6 +94,12 @@ class LunaCoreRuntime:
         self._monitor_task = asyncio.create_task(
             self._monitor_loop(),
             name="luna-core-monitor",
+        )
+
+        self.dashboard.apply_command(
+            command={
+                "action": "complete_boot",
+            }
         )
 
         await self._serve_api()
@@ -136,9 +148,6 @@ class LunaCoreRuntime:
         while not self._shutdown_event.is_set():
             try:
                 snapshot = self.system_monitor.snapshot()
-                self._update_dashboard_mode(
-                    snapshot
-                )
 
                 self._evaluate_temperature(snapshot.temperature_celsius)
                 self._evaluate_memory(snapshot.memory_percent)
@@ -306,122 +315,6 @@ class LunaCoreRuntime:
             severity="info",
             message=f"Reminder: {message}",
             timestamp=self._timestamp(),
-        )
-
-    def _update_dashboard_mode(
-        self,
-        snapshot,
-    ) -> None:
-        dashboard_state = self.dashboard.snapshot()
-
-        if not dashboard_state.get(
-            "automatic",
-            True,
-        ):
-            return
-
-        if self.dashboard.snapshot()["alerts"]:
-            alerts = self.dashboard.snapshot()["alerts"]
-
-            if any(
-                alert["severity"] == "critical"
-                for alert in alerts
-            ):
-                self.dashboard.apply_command(
-                    command={
-                        "action": "set_dashboard",
-                        "layout": "alert",
-                        "panels": [
-                            "system",
-                            "providers",
-                            "routing",
-                            "memory",
-                            "activity",
-                            "network",
-                            "improvement",
-                            "wakeword",
-                        ],
-                    }
-                )
-                return
-
-        if self.core.improvement is not None:
-            # Improvement mode will later become state-aware
-            # when active improvement execution is exposed.
-            pass
-
-        if self.runtime_state.routing.active:
-            self.dashboard.apply_command(
-                command={
-                    "action": "set_dashboard",
-                    "layout": "inference",
-                    "panels": [
-                        "system",
-                        "providers",
-                        "routing",
-                        "memory",
-                        "activity",
-                        "network",
-                        "improvement",
-                        "wakeword",
-                    ],
-                }
-            )
-            return
-
-        if snapshot.storage_percent >= 90:
-            self.dashboard.apply_command(
-                command={
-                    "action": "set_dashboard",
-                    "layout": "monitoring",
-                    "panels": [
-                        "system",
-                        "providers",
-                        "routing",
-                        "memory",
-                        "activity",
-                        "network",
-                        "improvement",
-                        "wakeword",
-                    ],
-                }
-            )
-            return
-
-        if not snapshot.network_interface_online:
-            self.dashboard.apply_command(
-                command={
-                    "action": "set_dashboard",
-                    "layout": "network",
-                    "panels": [
-                        "system",
-                        "providers",
-                        "routing",
-                        "memory",
-                        "activity",
-                        "network",
-                        "improvement",
-                        "wakeword",
-                    ],
-                }
-            )
-            return
-
-        self.dashboard.apply_command(
-            command={
-                "action": "set_dashboard",
-                "layout": "default",
-                "panels": [
-                    "system",
-                    "providers",
-                    "routing",
-                    "memory",
-                    "activity",
-                    "network",
-                    "improvement",
-                    "wakeword",
-                ],
-            }
         )
 
     @staticmethod
