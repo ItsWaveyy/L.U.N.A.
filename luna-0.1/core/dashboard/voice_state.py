@@ -28,6 +28,7 @@ class VoiceRuntimeState:
         self.vad = VoiceComponentState()
         self.stt = VoiceComponentState()
         self.tts = VoiceComponentState()
+        self.mic_muted = False
 
     def set_component(
         self,
@@ -66,6 +67,13 @@ class VoiceRuntimeState:
             if model is not None:
                 target.model = model
 
+    def set_mic_muted(
+        self,
+        muted: bool,
+    ) -> None:
+        with self._lock:
+            self.mic_muted = bool(muted)
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -81,4 +89,5 @@ class VoiceRuntimeState:
                 "tts": asdict(
                     self.tts
                 ),
+                "mic_muted": self.mic_muted,
             }

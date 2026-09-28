@@ -74,7 +74,6 @@
                     <span class="command-label">MUTE</span>
                 </button>
 
-
                 <button
                     id="listening-button"
                     class="command-button"
@@ -85,6 +84,56 @@
                     <span class="command-label">LISTEN</span>
                 </button>
 
+                <button
+                    id="stop-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Stop L.U.N.A."
+                >
+                    <span class="command-icon">■</span>
+                    <span class="command-label">STOP</span>
+                </button>
+
+                <button
+                    id="volume-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Volume controls"
+                >
+                    <span class="command-icon">VOL</span>
+                    <span class="command-label">VOL</span>
+                </button>
+
+                <div
+                    id="volume-menu"
+                    class="volume-menu hidden"
+                >
+                    <div class="volume-menu-header">
+                        <span>VOLUME</span>
+                        <span id="volume-value">50%</span>
+                    </div>
+
+                    <input
+                        id="volume-slider"
+                        class="volume-slider"
+                        type="range"
+                        min="0"
+                        max="100"
+                        value="50"
+                        step="1"
+                        aria-label="L.U.N.A. volume"
+                    >
+                </div>
+
+                <button
+                    id="settings-button"
+                    class="command-button"
+                    type="button"
+                    aria-label="Open settings"
+                >
+                    <span class="command-icon">⚙</span>
+                    <span class="command-label">SETTINGS</span>
+                </button>
 
                 <button
                     id="reconnect-button"
@@ -96,20 +145,101 @@
                     <span class="command-label">RECONNECT</span>
                 </button>
 
+            </div>
+
+            <div id="service-rail" aria-label="L.U.N.A. services">
 
                 <button
-                    id="restart-button"
-                    class="command-button danger"
+                    class="service-item"
+                    data-service="luna-core"
                     type="button"
-                    aria-label="Restart L.U.N.A."
+                    aria-label="L.U.N.A. Core service"
                 >
-                    <span class="command-icon">⟳</span>
-                    <span class="command-label">RESTART</span>
+                    <span class="service-dot"></span>
+                    <span class="service-name">CORE</span>
+                </button>
+
+                <button
+                    class="service-item"
+                    data-service="luna-agent"
+                    type="button"
+                    aria-label="L.U.N.A. Agent service"
+                >
+                    <span class="service-dot"></span>
+                    <span class="service-name">AGENT</span>
+                </button>
+
+                <button
+                    class="service-item"
+                    data-service="kokoro"
+                    type="button"
+                    aria-label="Kokoro voice service"
+                >
+                    <span class="service-dot"></span>
+                    <span class="service-name">KOKORO</span>
+                </button>
+
+                <button
+                    class="service-item"
+                    data-service="ollama"
+                    type="button"
+                    aria-label="Ollama service"
+                >
+                    <span class="service-dot"></span>
+                    <span class="service-name">OLLAMA</span>
                 </button>
 
             </div>
 
         </header>
+
+        <div id="service-menu" class="service-menu hidden">
+
+            <div class="service-menu-header">
+                <div>
+                    <span id="service-menu-name">CORE</span>
+                    <span id="service-menu-state">OFFLINE</span>
+                </div>
+
+                <button
+                    id="service-menu-close"
+                    class="service-menu-close"
+                    type="button"
+                    aria-label="Close service menu"
+                >
+                    ×
+                </button>
+            </div>
+
+            <div class="service-menu-actions">
+
+                <button
+                    id="service-start"
+                    class="service-action"
+                    type="button"
+                >
+                    START
+                </button>
+
+                <button
+                    id="service-stop"
+                    class="service-action"
+                    type="button"
+                >
+                    STOP
+                </button>
+
+                <button
+                    id="service-restart"
+                    class="service-action accent"
+                    type="button"
+                >
+                    RESTART
+                </button>
+
+            </div>
+
+        </div>
 
 
         <!-- =====================================================

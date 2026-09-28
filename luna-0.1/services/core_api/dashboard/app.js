@@ -1,6 +1,7 @@
 const REFRESH_INTERVAL = 1000;
 
 let latestTelemetry = null;
+let latestServices = [];
 let lastBootId = null;
 let startupRunning = false;
 let toastTimeout = null;
@@ -85,6 +86,169 @@ async function getTelemetry() {
     }
 
     return response.json();
+}
+
+async function getServices() {
+    const response = await fetch(
+        "/api/services",
+        {
+            cache: "no-store",
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Service request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
+function renderServices(data) {
+    latestServices =
+        data?.services ?? [];
+
+    const services =
+        data?.services ?? [];
+
+    for (const service of services) {
+        const item = document.querySelector(
+            `.service-item[data-service="${service.name}"]`
+        );
+
+        if (!item) {
+            continue;
+        }
+
+        item.classList.remove(
+            "active",
+            "warning",
+            "error",
+            "development"
+        );
+
+        if (service.state === "development") {
+            item.classList.add("development");
+            continue;
+        }
+
+        if (service.active) {
+            item.classList.add("active");
+            continue;
+        }
+
+        if (
+            service.state === "activating" ||
+            service.state === "deactivating" ||
+            service.state === "reloading"
+        ) {
+            item.classList.add("warning");
+            continue;
+        }
+
+        item.classList.add("error");
+    }
+}
+
+let selectedService = null;
+
+
+function serviceDisplayName(service) {
+    const names = {
+        "luna-core": "CORE",
+        "luna-agent": "AGENT",
+        "kokoro": "KOKORO",
+        "ollama": "OLLAMA",
+    };
+
+    return names[service] ?? service.toUpperCase();
+}
+
+
+function getSelectedServiceStatus() {
+    return latestServices.find(
+        service =>
+            service.name === selectedService
+    );
+}
+
+
+function openServiceMenu(service) {
+    selectedService = service;
+
+    const menu = byId("service-menu");
+
+    if (!menu) {
+        return;
+    }
+
+    const status =
+        getSelectedServiceStatus();
+
+    setText(
+        "service-menu-name",
+        serviceDisplayName(service)
+    );
+
+    setText(
+        "service-menu-state",
+        status?.state?.toUpperCase() ??
+        "UNKNOWN"
+    );
+
+    menu.classList.remove("hidden");
+}
+
+
+function closeServiceMenu() {
+    selectedService = null;
+
+    byId("service-menu")
+        ?.classList.add("hidden");
+}
+
+
+async function controlSelectedService(
+    action
+) {
+    if (!selectedService) {
+        return;
+    }
+
+    const service =
+        selectedService;
+
+    try {
+        showToast(
+            `${action.toUpperCase()} ${serviceDisplayName(service)}...`
+        );
+
+        await postJson(
+            "/api/control",
+            {
+                action:
+                    `${action}_service`,
+                payload: {
+                    service,
+                },
+            }
+        );
+
+        showToast(
+            `${serviceDisplayName(service)} ${action} accepted.`
+        );
+
+        await refreshTelemetry();
+
+        openServiceMenu(service);
+
+    } catch (error) {
+        showToast(
+            error.message,
+            "warning"
+        );
+    }
 }
 
 async function postJson(url, payload) {
@@ -1049,31 +1213,25 @@ function shouldRunStartup(
    ========================================================= */
 
 async function toggleListening() {
-    const current =
-        latestTelemetry?.core?.listening ??
-        false;
+    const enabled = !latestTelemetry?.voice?.listening;
 
     try {
-        await postJson(
-            "/api/listening",
-            {
-                listening: !current,
-            }
-        );
+        await postJson("/api/control", {
+            action: "listen",
+            payload: {
+                enabled,
+            },
+        });
 
         showToast(
-            !current
+            enabled
                 ? "Listening enabled."
                 : "Listening disabled."
         );
 
         await refreshTelemetry();
-
     } catch (error) {
-        showToast(
-            error.message,
-            "warning"
-        );
+        showToast(error.message, "warning");
     }
 }
 
@@ -1108,19 +1266,18 @@ async function reconnect() {
 }
 
 function updateControlState() {
-    const listening =
-        latestTelemetry?.core?.listening ??
-        false;
+    const listening = Boolean(
+        latestTelemetry?.voice?.listening
+    );
 
-    const button =
-        byId("listening-button");
+    const button = byId("listening-button");
 
-    if (button) {
-        button.classList.toggle(
-            "active",
-            listening
-        );
-    }
+    if (!button) return;
+
+    button.classList.toggle(
+        "active",
+        listening
+    );
 }
 
 function wireControls() {
@@ -1142,15 +1299,112 @@ function wireControls() {
             restartAgent
         );
 
-    byId("mute-button")
+    byId("mute-button")?.addEventListener("click", async () => {
+        const muted = !Boolean(
+            latestTelemetry?.voice?.mic_muted
+        );
+
+        try {
+            const result = await postJson("/api/control", {
+                action: "mic",
+                payload: {
+                    enabled: !muted,
+                },
+            });
+
+            if (result.status === "unavailable") {
+                showToast(
+                    "Hardware microphone control is Pi-only.",
+                    "warning"
+                );
+                return;
+            }
+
+            showToast(
+                muted
+                    ? "Microphone muted."
+                    : "Microphone unmuted."
+            );
+
+            await refreshTelemetry();
+        } catch (error) {
+            showToast(error.message, "warning");
+        }
+    });
+
+    document
+        .querySelectorAll(".service-item")
+        .forEach(item => {
+            item.addEventListener(
+                "click",
+                () => {
+                    openServiceMenu(
+                        item.dataset.service
+                    );
+                }
+            );
+        });
+
+    byId("service-menu-close")
         ?.addEventListener(
             "click",
-            () => {
-                showToast(
-                    "Microphone control will be connected to the voice device layer next."
-                );
-            }
+            closeServiceMenu
         );
+
+    byId("service-start")
+        ?.addEventListener(
+            "click",
+            () =>
+                controlSelectedService(
+                    "start"
+                )
+        );
+
+    byId("service-stop")
+        ?.addEventListener(
+            "click",
+            () =>
+                controlSelectedService(
+                    "stop"
+                )
+        );
+
+    byId("service-restart")
+        ?.addEventListener(
+            "click",
+            () =>
+                controlSelectedService(
+                    "restart"
+                )
+        );
+
+    const volumeButton = byId("volume-button");
+    const volumeMenu = byId("volume-menu");
+    const volumeSlider = byId("volume-slider");
+    const volumeValue = byId("volume-value");
+
+    if (volumeButton && volumeMenu && volumeSlider) {
+        volumeButton.addEventListener("click", () => {
+            volumeMenu.classList.toggle("hidden");
+        });
+
+        volumeSlider.addEventListener("input", async () => {
+            const volume = Number(volumeSlider.value);
+
+            if (volumeValue) {
+                volumeValue.textContent = `${volume}%`;
+            }
+
+            try {
+                await postJson("/api/control", {
+                    action: "volume",
+                    payload: { volume },
+                });
+            } catch (error) {
+                showToast(error.message, "warning");
+            }
+        });
+    }
 }
 
 
@@ -1276,11 +1530,18 @@ function renderTelemetry(
 
 async function refreshTelemetry() {
     try {
-        const telemetry =
-            await getTelemetry();
+        const [telemetry, services] =
+            await Promise.all([
+                getTelemetry(),
+                getServices(),
+            ]);
 
         renderTelemetry(
             telemetry
+        );
+
+        renderServices(
+            services
         );
 
     } catch (error) {

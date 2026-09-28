@@ -6,6 +6,8 @@ import subprocess
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
+import asyncio
+import platform
 
 from fastapi.responses import FileResponse
 
@@ -281,17 +283,270 @@ def create_core_api(runtime=None) -> FastAPI:
                 detail=str(exc),
             ) from exc
 
+    def set_microphone_enabled(enabled: bool) -> dict[str, Any]:
+        """
+        Enable or mute L.U.N.A.'s physical microphone.
+
+        The Raspberry Pi resolves the physical PCM2902 source dynamically
+        so the PipeWire node ID can change across reboots.
+        """
+
+        if platform.system() != "Linux":
+            return {
+                "status": "unavailable",
+                "action": "mic",
+                "enabled": enabled,
+                "reason": "Hardware microphone control is Pi-only.",
+            }
+
+        try:
+            result = subprocess.run(
+                ["wpctl", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return {
+                    "status": "error",
+                    "action": "mic",
+                    "enabled": enabled,
+                    "reason": result.stderr.strip() or "wpctl status failed.",
+                }
+
+            mic_node = None
+
+            for line in result.stdout.splitlines():
+                if "PCM2902 Audio Codec Analog Mono" in line:
+                    parts = line.strip().split(".", 1)
+                    if parts and parts[0].isdigit():
+                        mic_node = parts[0]
+                        break
+
+            if mic_node is None:
+                return {
+                    "status": "error",
+                    "action": "mic",
+                    "enabled": enabled,
+                    "reason": "Physical PCM2902 microphone source not found.",
+                }
+
+            mute = "0" if enabled else "1"
+
+            mute_result = subprocess.run(
+                ["wpctl", "set-mute", mic_node, mute],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            if mute_result.returncode != 0:
+                return {
+                    "status": "error",
+                    "action": "mic",
+                    "enabled": enabled,
+                    "reason": (
+                        mute_result.stderr.strip()
+                        or "wpctl set-mute failed."
+                    ),
+                }
+
+            return {
+                "status": "ready",
+                "action": "mic",
+                "enabled": enabled,
+                "node": mic_node,
+            }
+
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            return {
+                "status": "error",
+                "action": "mic",
+                "enabled": enabled,
+                "reason": str(exc),
+            }
+
+    def set_speaker_volume(volume: int) -> dict[str, Any]:
+        """
+        Set L.U.N.A.'s physical speaker volume.
+
+        The Raspberry Pi resolves the current luna-echo-sink
+        dynamically so PipeWire node IDs can change across reboots.
+        """
+
+        if platform.system() != "Linux":
+            return {
+                "status": "unavailable",
+                "action": "volume",
+                "volume": volume,
+                "reason": "Hardware volume control is Pi-only.",
+            }
+
+        volume = max(0, min(100, int(volume)))
+
+        try:
+            result = subprocess.run(
+                ["wpctl", "status"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            if result.returncode != 0:
+                return {
+                    "status": "error",
+                    "action": "volume",
+                    "volume": volume,
+                    "reason": result.stderr.strip()
+                    or "wpctl status failed.",
+                }
+
+            speaker_node = None
+
+            for line in result.stdout.splitlines():
+                if "luna-echo-sink" in line:
+                    parts = line.strip().split(".", 1)
+
+                    if parts and parts[0].isdigit():
+                        speaker_node = parts[0]
+                        break
+
+            if speaker_node is None:
+                return {
+                    "status": "error",
+                    "action": "volume",
+                    "volume": volume,
+                    "reason": "L.U.N.A. speaker sink not found.",
+                }
+
+            level = volume / 100
+
+            volume_result = subprocess.run(
+                [
+                    "wpctl",
+                    "set-volume",
+                    speaker_node,
+                    str(level),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            if volume_result.returncode != 0:
+                return {
+                    "status": "error",
+                    "action": "volume",
+                    "volume": volume,
+                    "reason": volume_result.stderr.strip()
+                    or "wpctl set-volume failed.",
+                }
+
+            return {
+                "status": "ready",
+                "action": "volume",
+                "volume": volume,
+                "node": speaker_node,
+            }
+
+        except (OSError, subprocess.TimeoutExpired, ValueError) as exc:
+            return {
+                "status": "error",
+                "action": "volume",
+                "volume": volume,
+                "reason": str(exc),
+            }
+
     @app.post("/api/control")
     async def control_runtime(
         request: ControlRequest,
     ) -> dict[str, Any]:
-        runtime = get_runtime()
 
         action = request.action.strip().lower()
+        payload = request.payload or {}
 
-        if action == "restart_service":
+        if action == "stop":
+
+            control_path = Path(
+                "/tmp/luna-agent-control.json"
+            )
+
+            import json
+            from uuid import uuid4
+
+            control_path.write_text(
+                json.dumps(
+                    {
+                        "id": uuid4().hex,
+                        "action": "stop",
+                    }
+                )
+            )
+
+            return {
+                "status": "accepted",
+                "action": "stop",
+            }
+
+        if action == "listen":
+            control_path = Path(
+                "/tmp/luna-agent-control.json"
+            )
+
+            import json
+            from uuid import uuid4
+
+            control_path.write_text(
+                json.dumps(
+                    {
+                        "id": uuid4().hex,
+                        "action": "listen",
+                        "enabled": bool(
+                            request.payload.get(
+                                "enabled",
+                                True,
+                            )
+                        ),
+                    }
+                )
+            )
+
+            return {
+                "status": "accepted",
+                "action": "listen",
+                "enabled": bool(
+                    request.payload.get(
+                        "enabled",
+                        True,
+                    )
+                ),
+            }
+
+        if action == "mic":
+            enabled = bool(payload.get("enabled", True))
+
+            result = set_microphone_enabled(enabled)
+
+            if result["status"] == "ready":
+                runtime.voice_state.set_mic_muted(
+                    not enabled
+                )
+
+            return result
+
+        if action in {
+            "start_service",
+            "stop_service",
+            "restart_service",
+        }:
+
             service = str(
-                request.payload.get("service", "")
+                payload.get("service", "")
             ).strip()
 
             if not service:
@@ -300,15 +555,138 @@ def create_core_api(runtime=None) -> FastAPI:
                     detail="Missing service.",
                 )
 
-            return control_luna_service(
-                service,
-                "restart",
+            system_action = action.replace(
+                "_service",
+                "",
             )
 
+            try:
+                result = control_luna_service(
+                    service,
+                    system_action,
+                )
+
+                return {
+                    "status": "accepted",
+                    "action": action,
+                    "result": result,
+                }
+
+            except (
+                ValueError,
+                RuntimeError,
+            ) as exc:
+
+                raise HTTPException(
+                    status_code=400,
+                    detail=str(exc),
+                ) from exc
+
+        if action == "volume":
+            volume = int(
+                payload.get(
+                    "volume",
+                    100,
+                )
+            )
+
+            return set_speaker_volume(volume)
+
+        if action == "set_listening":
+
+            runtime = get_runtime()
+
+            enabled = bool(
+                payload.get(
+                    "enabled",
+                    True,
+                )
+            )
+
+            runtime.core.set_listening(
+                enabled
+            )
+
+            return {
+                "status": "accepted",
+                "action": action,
+                "enabled": enabled,
+            }
+
         raise HTTPException(
-            status_code=400,
-            detail=f"Unknown control action: {action}",
-        )
+        status_code=400,
+        detail=(
+            f"Unknown control action: {action}"
+        ),
+    )
+
+
+    LUNA_SERVICE_NAMES = {
+        "luna-core": "luna-core.service",
+        "luna-agent": "luna-agent.service",
+        "kokoro": "kokoro.service",
+        "ollama": "ollama.service",
+    }
+
+
+    def get_service_status(service: str) -> dict[str, Any]:
+        if service not in LUNA_SERVICE_NAMES:
+            raise ValueError(
+                f"Unknown L.U.N.A. service: {service}"
+            )
+
+        unit = LUNA_SERVICE_NAMES[service]
+
+        try:
+            result = subprocess.run(
+                [
+                    "systemctl",
+                    "is-active",
+                    unit,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+
+            state = result.stdout.strip()
+
+            return {
+                "name": service,
+                "unit": unit,
+                "state": state or "unknown",
+                "active": state == "active",
+            }
+
+        except FileNotFoundError:
+            # Mac/dev environment.
+            return {
+                "name": service,
+                "unit": unit,
+                "state": "development",
+                "active": False,
+            }
+
+        except Exception as exc:
+            return {
+                "name": service,
+                "unit": unit,
+                "state": "unknown",
+                "active": False,
+                "error": str(exc),
+            }
+
+
+    @app.get("/api/services")
+    async def service_statuses() -> dict[str, Any]:
+        return {
+            "services": [
+                get_service_status(name)
+                for name in LUNA_SERVICE_NAMES
+            ]
+        }
+
 
     @app.post("/api/dashboard/command")
     async def dashboard_command(

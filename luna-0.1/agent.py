@@ -366,6 +366,62 @@ async def my_agent(
         ),
     )
 
+    control_file = (
+        "/tmp/luna-agent-control.json"
+    )
+
+    async def watch_control_file():
+        last_command = None
+
+        while True:
+            try:
+                from pathlib import Path
+                import json
+
+                path = Path(control_file)
+
+                if path.exists():
+                    command = json.loads(
+                        path.read_text()
+                    )
+
+                    command_id = command.get(
+                        "id"
+                    )
+
+                    if (
+                        command_id
+                        and command_id != last_command
+                    ):
+                        last_command = command_id
+
+                        action = (
+                            command.get("action")
+                        )
+
+                        if action == "stop":
+                            await session.interrupt()
+
+                        elif action == "listen":
+                            enabled = bool(
+                                command.get(
+                                    "enabled",
+                                    True,
+                                )
+                            )
+
+                            session.input.set_audio_enabled(
+                                enabled
+                            )
+
+            except Exception as exc:
+                luna_log(
+                    "Agent control watcher error: "
+                    f"{exc}"
+                )
+
+            await asyncio.sleep(0.25)
+
     @session.on("user_input_transcribed")
     def on_user_input_transcribed(event):
         if not event.is_final:
@@ -483,6 +539,13 @@ async def my_agent(
             "standby manager stopped."
         )
 
+        control_task.cancel()
+
+        try:
+            await control_task
+        except asyncio.CancelledError:
+            pass
+
         luna_log(
             "LiveKit session shutdown: "
             "Core remains online."
@@ -516,6 +579,10 @@ async def my_agent(
     )
 
     session.input.set_audio_enabled(False)
+
+    control_task = asyncio.create_task(
+        watch_control_file()
+    )
 
     luna_log(
         "Speaker identity processor: ONLINE"
