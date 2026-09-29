@@ -6,6 +6,10 @@ let lastBootId = null;
 let startupRunning = false;
 let toastTimeout = null;
 
+let demoRunning = false;
+let demoStepIndex = 0;
+let demoTimeout = null;
+
 
 /* =========================================================
    BASIC HELPERS
@@ -88,6 +92,23 @@ async function getTelemetry() {
     return response.json();
 }
 
+async function getSystem() {
+    const response = await fetch(
+        "/api/system",
+        {
+            cache: "no-store",
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `System request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
 async function getServices() {
     const response = await fetch(
         "/api/services",
@@ -98,11 +119,467 @@ async function getServices() {
 
     if (!response.ok) {
         throw new Error(
-            `Service request failed: ${response.status}`
+            `Services request failed: ${response.status}`
         );
     }
 
     return response.json();
+}
+
+async function getStatus() {
+    const response = await fetch(
+        "/api/status",
+        {
+            cache: "no-store",
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Status request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
+async function getDataStatus() {
+    const response = await fetch(
+        "/api/data",
+        {
+            cache: "no-store",
+        }
+    );
+
+    if (!response.ok) {
+        throw new Error(
+            `Data request failed: ${response.status}`
+        );
+    }
+
+    return response.json();
+}
+
+async function getUpdateStatus() {
+  const response = await fetch("/api/update", {
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Update request failed: ${response.status}`
+    );
+  }
+
+  return response.json();
+}
+
+function renderDataSettings(data) {
+    const available =
+        data?.status === "online";
+
+    setText(
+        "settings-memory-count",
+        available
+            ? String(data.memories ?? 0)
+            : "—"
+    );
+
+    setText(
+        "settings-session-count",
+        available
+            ? String(data.sessions ?? 0)
+            : "—"
+    );
+
+    setText(
+        "settings-message-count",
+        available
+            ? String(data.messages ?? 0)
+            : "—"
+    );
+
+    setText(
+        "settings-reminder-count",
+        available
+            ? String(data.reminders ?? 0)
+            : "—"
+    );
+
+    setText(
+        "settings-data-state",
+        available
+            ? "ONLINE"
+            : "UNAVAILABLE"
+    );
+}
+
+function renderUpdateSettings(update) {
+  const available =
+    update?.status === "online" ||
+    update?.status === "development";
+
+  const development = update?.status === "development";
+
+  let state = "UNAVAILABLE";
+
+  if (development) {
+    state = update.local_changes
+      ? "DEVELOPMENT"
+      : "DEVELOPMENT • CLEAN";
+  } else if (available) {
+    if (update.local_changes) {
+      state = "LOCAL CHANGES";
+    } else if (update.current) {
+      state = "CURRENT";
+    } else {
+      state = "UPDATE AVAILABLE";
+    }
+  }
+
+  setText("settings-update-state", state);
+
+  setText(
+    "settings-update-branch",
+    available ? update.branch ?? "—" : "—"
+  );
+
+  setText(
+    "settings-update-version",
+    available ? update.commit ?? "—" : "—"
+  );
+
+  setText(
+    "settings-update-remote",
+    available ? update.remote ?? "—" : "—"
+  );
+
+  setText(
+    "settings-update-schedule",
+    available ? update.schedule ?? "—" : "—"
+  );
+
+  setText(
+    "settings-update-last",
+    available ? update.last_update ?? "—" : "—"
+  );
+
+  const warning = byId("settings-update-warning");
+
+  if (warning) {
+    warning.classList.toggle(
+      "hidden",
+      !available || !update.local_changes
+    );
+  }
+
+  const stateElement = byId("settings-update-state");
+
+  if (stateElement) {
+    stateElement.classList.remove(
+        "is-current",
+        "is-development",
+        "is-warning",
+        "is-available"
+    );
+
+    if (state === "CURRENT") {
+        stateElement.classList.add("is-current");
+    } else if (state === "DEVELOPMENT") {
+        stateElement.classList.add("is-development");
+    } else if (state === "UPDATE AVAILABLE") {
+        stateElement.classList.add("is-available");
+    } else if (state === "LOCAL CHANGES") {
+        stateElement.classList.add("is-warning");
+    }
+  }
+}
+
+function renderAISettings(data) {
+    const providers = data?.providers ?? [];
+
+    const healthyCount = providers.filter(
+        (provider) => provider.healthy === true
+    ).length;
+
+    setText(
+        "settings-ai-mode",
+        data?.mode ?? "—"
+    );
+
+    setText(
+        "settings-ai-providers",
+        providers.length
+            ? `${healthyCount}/${providers.length}`
+            : "—"
+    );
+
+    setText(
+        "settings-ai-conversation",
+        data?.conversation?.active
+            ? "ACTIVE"
+            : "IDLE"
+    );
+
+    setText(
+        "settings-ai-improvement",
+        data?.improvement?.available
+            ? "AVAILABLE"
+            : "OFF"
+    );
+
+    setText(
+        "settings-ai-state",
+        data?.status === "online"
+            ? "ONLINE"
+            : "OFFLINE"
+    );
+
+    const container = byId(
+        "settings-ai-providers-list"
+    );
+
+    if (!container) {
+        return;
+    }
+
+    if (!providers.length) {
+        container.innerHTML = `
+            <div class="settings-service-row error">
+                <span class="settings-service-name">
+                    No providers reported
+                </span>
+
+                <span class="settings-service-state">
+                    UNKNOWN
+                </span>
+            </div>
+        `;
+
+        return;
+    }
+
+    container.innerHTML = providers
+        .map((provider) => {
+            const healthy =
+                provider.healthy === true;
+
+            const state =
+                healthy
+                    ? "HEALTHY"
+                    : "UNAVAILABLE";
+
+            const className =
+                healthy
+                    ? "active"
+                    : "error";
+
+            const model =
+                provider.model ?? "NO MODEL";
+
+            const capabilities =
+                provider.capabilities ?? [];
+
+            const capabilityText =
+                capabilities.length
+                    ? capabilities.join(" · ")
+                    : "NO CAPABILITIES";
+
+            return `
+                <div
+                    class="settings-service-row ${className}"
+                >
+                    <div>
+                        <span class="settings-service-name">
+                            ${provider.name}
+                        </span>
+
+                        <span class="settings-service-model">
+                            ${model}
+                        </span>
+
+                        <span class="settings-service-capabilities">
+                            ${capabilityText}
+                        </span>
+                    </div>
+
+                    <span class="settings-service-state">
+                        ${state}
+                    </span>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+function renderNetworkSettings(system) {
+    const hostname =
+        system?.host?.hostname;
+
+    const networkOnline =
+        system?.network?.interface_online === true;
+
+    setText(
+        "settings-hostname",
+        hostname ?? "—"
+    );
+
+    setText(
+        "settings-network",
+        networkOnline
+            ? "ONLINE"
+            : "OFFLINE"
+    );
+
+    setText(
+        "settings-network-state",
+        networkOnline
+            ? "ONLINE"
+            : "OFFLINE"
+    );
+}
+
+function renderServicesSettings(data) {
+    const container = byId(
+        "settings-services"
+    );
+
+    if (!container) {
+        return;
+    }
+
+    const services = data?.services ?? [];
+
+    if (!services.length) {
+        container.innerHTML = `
+            <div class="settings-service-row">
+                <span class="settings-service-name">
+                    No services reported
+                </span>
+
+                <span class="settings-service-state">
+                    UNKNOWN
+                </span>
+            </div>
+        `;
+
+        setText(
+            "settings-services-state",
+            "UNKNOWN"
+        );
+
+        return;
+    }
+
+    container.innerHTML = services
+        .map((service) => {
+            const active = service.active === true;
+            const state = String(
+                service.state ?? "unknown"
+            ).toUpperCase();
+
+            let className = "";
+
+            if (active) {
+                className = "active";
+            } else if (
+                state === "DEVELOPMENT"
+            ) {
+                className = "warning";
+            } else {
+                className = "error";
+            }
+
+            return `
+                <div
+                    class="settings-service-row ${className}"
+                >
+                    <span class="settings-service-name">
+                        ${service.name}
+                    </span>
+
+                    <span class="settings-service-state">
+                        ${state}
+                    </span>
+                </div>
+            `;
+        })
+        .join("");
+
+    const activeCount = services.filter(
+        (service) => service.active === true
+    ).length;
+
+    setText(
+        "settings-services-state",
+        `${activeCount}/${services.length} ONLINE`
+    );
+}
+
+function renderSystemSettings(system) {
+    const cpu = system?.cpu;
+    const memory = system?.memory;
+    const temperature = system?.temperature;
+    const storage = system?.storage;
+
+    setText(
+        "settings-cpu",
+        cpu?.percent != null
+            ? `${Number(cpu.percent).toFixed(0)}%`
+            : "—"
+    );
+
+    setText(
+        "settings-memory",
+        memory?.percent != null
+            ? `${Number(memory.percent).toFixed(0)}%`
+            : "—"
+    );
+
+    setText(
+        "settings-temperature",
+        temperature?.celsius != null
+            ? `${Number(temperature.celsius).toFixed(1)}°C`
+            : "—"
+    );
+
+    const uptime = system?.uptime_seconds;
+
+    if (uptime != null) {
+        const totalSeconds = Math.floor(
+            Number(uptime)
+        );
+
+        const hours = Math.floor(
+            totalSeconds / 3600
+        );
+
+        const minutes = Math.floor(
+            (totalSeconds % 3600) / 60
+        );
+
+        setText(
+            "settings-uptime",
+            `${hours}h ${minutes}m`
+        );
+    } else {
+        setText(
+            "settings-uptime",
+            "—"
+        );
+    }
+
+    setText(
+        "settings-system-state",
+        system ? "ONLINE" : "UNKNOWN"
+    );
+
+    setText(
+        "settings-storage",
+        storage?.percent != null
+            ? `${Number(storage.percent).toFixed(0)}%`
+            : "—"
+    );
 }
 
 function renderServices(data) {
@@ -558,6 +1035,1345 @@ function renderPresentation(
     show("canvas-presentation");
 
     return true;
+}
+
+/* =========================================================
+   SYSTEM DEMO
+   ========================================================= */
+
+const DEMO_STEPS = [
+    { id: "intro", duration: 3200 },
+    { id: "runtime", duration: 5200 },
+    { id: "services", duration: 5600 },
+    { id: "intelligence", duration: 5600 },
+    { id: "memory", duration: 5200 },
+    { id: "deployment", duration: 5200 },
+    { id: "capabilities", duration: 6200 },
+    { id: "finale", duration: 3600 },
+];
+
+function setDemoState(state, running = false) {
+    const element = byId("settings-demo-state");
+
+    if (element) {
+        element.classList.remove(
+            "is-demo",
+            "is-demo-running"
+        );
+
+        element.classList.add(
+            running
+                ? "is-demo-running"
+                : "is-demo"
+        );
+    }
+
+    setText(
+        "settings-demo-state",
+        state
+    );
+
+    const button = byId(
+        "settings-demo-button"
+    );
+
+    if (button) {
+        button.classList.toggle(
+            "running",
+            running
+        );
+
+        button.textContent =
+            running
+                ? "DEMO RUNNING"
+                : "RUN DEMO";
+    }
+}
+
+function clearDemoTimer() {
+    if (demoTimeout) {
+        window.clearTimeout(
+            demoTimeout
+        );
+
+        demoTimeout = null;
+    }
+}
+
+function closeSettingsForDemo() {
+    byId(
+        "settings-overlay"
+    )?.classList.add("hidden");
+}
+
+function createDemoShell() {
+    const presentation =
+        byId("canvas-presentation");
+
+    if (!presentation) {
+        return null;
+    }
+
+    clearPresentation();
+
+    presentation.classList.add(
+        "demo-stage"
+    );
+
+    const shell =
+        createElement(
+            "div",
+            "demo-shell"
+        );
+
+    presentation.appendChild(shell);
+
+    return shell;
+}
+
+function destroyDemoShell() {
+    const presentation =
+        byId("canvas-presentation");
+
+    if (!presentation) {
+        return;
+    }
+
+    presentation.classList.remove(
+        "demo-stage"
+    );
+
+    clearPresentation();
+}
+
+function demoHeading(
+    shell,
+    eyebrow,
+    title,
+    caption
+) {
+    const heading =
+        createElement(
+            "div",
+            "demo-heading"
+        );
+
+    const eyebrowNode =
+        createElement(
+            "div",
+            "demo-eyebrow",
+            eyebrow
+        );
+
+    const titleNode =
+        createElement(
+            "div",
+            "demo-title",
+            title
+        );
+
+    const captionNode =
+        createElement(
+            "div",
+            "demo-caption",
+            caption
+        );
+
+    heading.appendChild(
+        eyebrowNode
+    );
+
+    heading.appendChild(
+        titleNode
+    );
+
+    heading.appendChild(
+        captionNode
+    );
+
+    shell.appendChild(
+        heading
+    );
+}
+
+function demoCorners(
+    shell,
+    leftTop = "L.U.N.A. // DEMONSTRATION",
+    rightTop = "LIVE SYSTEM",
+    leftBottom = "NEURAL ASSISTANT",
+    rightBottom = "ONLINE"
+) {
+    const positions = [
+        ["top-left", leftTop],
+        ["top-right", rightTop],
+        ["bottom-left", leftBottom],
+        ["bottom-right", rightBottom],
+    ];
+
+    positions.forEach(
+        ([position, value]) => {
+            const node =
+                createElement(
+                    "div",
+                    `demo-corner ${position}`
+                );
+
+            node.textContent =
+                value;
+
+            shell.appendChild(node);
+        }
+    );
+}
+
+function demoNarration(
+    shell,
+    label,
+    message
+) {
+    const narration =
+        createElement(
+            "div",
+            "demo-narration"
+        );
+
+    const labelNode =
+        createElement(
+            "div",
+            "demo-narration-label",
+            label
+        );
+
+    const textNode =
+        createElement(
+            "div",
+            "demo-narration-text",
+            message
+        );
+
+    narration.appendChild(
+        labelNode
+    );
+
+    narration.appendChild(
+        textNode
+    );
+
+    shell.appendChild(
+        narration
+    );
+}
+
+function renderDemoIntro() {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoCorners(
+        shell,
+        "L.U.N.A. // SYSTEM DEMONSTRATION",
+        "LIVE",
+        "LOWKEY USEFUL NEURAL ASSISTANT",
+        "READY"
+    );
+
+    const finale =
+        createElement(
+            "div",
+            "demo-finale"
+        );
+
+    const logo =
+        createElement(
+            "div",
+            "demo-finale-logo",
+            "L.U.N.A."
+        );
+
+    const status =
+        createElement(
+            "div",
+            "demo-finale-status",
+            "SYSTEM DEMONSTRATION"
+        );
+
+    finale.appendChild(
+        logo
+    );
+
+    finale.appendChild(
+        status
+    );
+
+    shell.appendChild(
+        finale
+    );
+
+    demoNarration(
+        shell,
+        "L.U.N.A.",
+        "You asked what I'm for. Let me show you."
+    );
+}
+
+function renderDemoRuntime(
+    system
+) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoHeading(
+        shell,
+        "SYSTEM RUNTIME",
+        "Everything starts here.",
+        "Live telemetry from the L.U.N.A. host"
+    );
+
+    demoCorners(
+        shell,
+        "RUNTIME // TELEMETRY",
+        "LIVE DATA",
+        `HOST ${system?.host ?? "UNKNOWN"}`,
+        "SYSTEM ONLINE"
+    );
+
+    const core =
+        createElement(
+            "div",
+            "demo-core"
+        );
+
+    [
+        "one",
+        "two",
+        "three",
+        "four"
+    ].forEach(
+        name => {
+            core.appendChild(
+                createElement(
+                    "div",
+                    `demo-core-ring ${name}`
+                )
+            );
+        }
+    );
+
+    core.appendChild(
+        createElement(
+            "div",
+            "demo-core-center"
+        )
+    );
+
+    core.appendChild(
+        createElement(
+            "div",
+            "demo-core-label",
+            "L.U.N.A. CORE"
+        )
+    );
+
+    shell.appendChild(
+        core
+    );
+
+    const telemetry =
+        [
+            [
+                "left",
+                "CPU",
+                formatPercent(
+                    system?.cpu?.percent
+                ),
+                "%"
+            ],
+            [
+                "left",
+                "MEMORY",
+                formatPercent(
+                    system?.memory?.percent
+                ),
+                "%"
+            ],
+            [
+                "right",
+                "TEMPERATURE",
+                system?.temperature?.celsius != null
+                    ? Number(
+                        system.temperature.celsius
+                    ).toFixed(1)
+                    : "—",
+                "°C"
+            ],
+            [
+                "right",
+                "STORAGE",
+                system?.storage?.percent != null
+                    ? Number(
+                        system.storage.percent
+                    ).toFixed(0)
+                    : "—",
+                "%"
+            ],
+        ];
+
+    const groups = {
+        left: [],
+        right: [],
+    };
+
+    telemetry.forEach(
+        item => {
+            groups[item[0]].push(
+                item
+            );
+        }
+    );
+
+    Object.entries(
+        groups
+    ).forEach(
+        ([side, items]) => {
+            const group =
+                createElement(
+                    "div",
+                    `demo-telemetry ${side}`
+                );
+
+            items.forEach(
+                item => {
+                    const card =
+                        createElement(
+                            "div",
+                            "demo-telemetry-card"
+                        );
+
+                    const label =
+                        createElement(
+                            "div",
+                            "demo-telemetry-label",
+                            item[1]
+                        );
+
+                    const value =
+                        createElement(
+                            "span",
+                            "demo-telemetry-value",
+                            item[2]
+                        );
+
+                    const unit =
+                        createElement(
+                            "span",
+                            "demo-telemetry-unit",
+                            item[3]
+                        );
+
+                    value.appendChild(
+                        unit
+                    );
+
+                    card.appendChild(
+                        label
+                    );
+
+                    card.appendChild(
+                        value
+                    );
+
+                    group.appendChild(
+                        card
+                    );
+                }
+            );
+
+            shell.appendChild(
+                group
+            );
+        }
+    );
+
+    shell.appendChild(
+        createElement(
+            "div",
+            "demo-stream left"
+        )
+    );
+
+    shell.appendChild(
+        createElement(
+            "div",
+            "demo-stream right"
+        )
+    );
+
+    demoNarration(
+        shell,
+        "LIVE TELEMETRY",
+        "CPU, memory, temperature and storage are being monitored in real time."
+    );
+}
+
+function renderDemoServices(
+    services
+) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    const list =
+        services?.services ?? [];
+
+    demoHeading(
+        shell,
+        "SERVICE ARCHITECTURE",
+        "A modular system.",
+        "Every subsystem has a job."
+    );
+
+    demoCorners(
+        shell,
+        "ARCHITECTURE // SERVICES",
+        `${list.length} MODULES`,
+        "LIVE SERVICE STATE",
+        "CONNECTED"
+    );
+
+    const network =
+        createElement(
+            "div",
+            "demo-network"
+        );
+
+    const center =
+        createElement(
+            "div",
+            "demo-network-center"
+        );
+
+    center.appendChild(
+        createElement(
+            "span",
+            "",
+            "L.U.N.A."
+        )
+    );
+
+    network.appendChild(
+        center
+    );
+
+    const positions = [
+        ["luna-core", 50, 10],
+        ["luna-agent", 15, 50],
+        ["kokoro", 85, 50],
+        ["ollama", 50, 90],
+    ];
+
+    positions.forEach(
+        ([name, left, top]) => {
+            const service =
+                list.find(
+                    item =>
+                        item.name === name
+                );
+
+            const node =
+                createElement(
+                    "div",
+                    "demo-node"
+                );
+
+            node.style.left =
+                `${left}%`;
+
+            node.style.top =
+                `${top}%`;
+
+            if (
+                service?.active === true
+            ) {
+                node.classList.add(
+                    "active"
+                );
+            } else {
+                node.classList.add(
+                    "warning"
+                );
+            }
+
+            node.appendChild(
+                createElement(
+                    "div",
+                    "demo-node-name",
+                    name.toUpperCase()
+                )
+            );
+
+            node.appendChild(
+                createElement(
+                    "div",
+                    "demo-node-state",
+                    String(
+                        service?.state ??
+                        "UNKNOWN"
+                    ).toUpperCase()
+                )
+            );
+
+            if (service?.model) {
+                node.appendChild(
+                    createElement(
+                        "div",
+                        "demo-node-model",
+                        service.model
+                    )
+                );
+            }
+
+            network.appendChild(
+                node
+            );
+        }
+    );
+
+    shell.appendChild(
+        network
+    );
+
+    demoNarration(
+        shell,
+        "MODULAR ARCHITECTURE",
+        "Core, agent, voice and local intelligence operate as separate services."
+    );
+}
+
+function renderDemoIntelligence(
+    status
+) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    const providers =
+        status?.providers ?? [];
+
+    const healthy =
+        providers.filter(
+            provider =>
+                provider.healthy === true
+        ).length;
+
+    demoHeading(
+        shell,
+        "INTELLIGENCE",
+        "Multiple layers. One assistant.",
+        `${healthy}/${providers.length} providers currently healthy`
+    );
+
+    demoCorners(
+        shell,
+        "INTELLIGENCE // PROVIDERS",
+        "LIVE",
+        "MODEL ROUTING",
+        "ACTIVE"
+    );
+
+    const capabilities =
+        [
+            "VOICE",
+            "MEMORY",
+            "TOOLS",
+            "LOCAL AI",
+            "SYSTEM CONTROL",
+            "RESEARCH",
+        ];
+
+    const matrix =
+        createElement(
+            "div",
+            "demo-capabilities"
+        );
+
+    const core =
+        createElement(
+            "div",
+            "demo-capability core",
+            "L.U.N.A. INTELLIGENCE"
+        );
+
+    matrix.appendChild(
+        core
+    );
+
+    capabilities.forEach(
+        (capability, index) => {
+            const node =
+                createElement(
+                    "div",
+                    "demo-capability",
+                    capability
+                );
+
+            node.style.animationDelay =
+                `${index * 110}ms`;
+
+            matrix.appendChild(
+                node
+            );
+        }
+    );
+
+    shell.appendChild(
+        matrix
+    );
+
+    const models =
+        providers
+            .filter(
+                provider =>
+                    provider.healthy === true
+            )
+            .map(
+                provider =>
+                    `${provider.name}: ${provider.model ?? "MODEL ACTIVE"}`
+            )
+            .join(
+                "  ·  "
+            );
+
+    demoNarration(
+        shell,
+        "INTELLIGENCE LAYER",
+        models ||
+        "Local intelligence systems are currently unavailable."
+    );
+}
+
+function renderDemoMemory(
+    data
+) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoHeading(
+        shell,
+        "MEMORY & ARCHIVE",
+        "Context doesn't disappear.",
+        "Persistent conversation and reminder data"
+    );
+
+    demoCorners(
+        shell,
+        "MEMORY // ARCHIVE",
+        "DATABASE ONLINE",
+        `${data?.sessions ?? 0} SESSIONS`,
+        `${data?.messages ?? 0} MESSAGES`
+    );
+
+    const field =
+        createElement(
+            "div",
+            "demo-memory-field"
+        );
+
+    const center =
+        createElement(
+            "div",
+            "demo-memory-center"
+        );
+
+    center.appendChild(
+        createElement(
+            "div",
+            "demo-memory-count",
+            String(
+                data?.sessions ?? 0
+            )
+        )
+    );
+
+    center.appendChild(
+        createElement(
+            "div",
+            "demo-memory-label",
+            "SESSIONS"
+        )
+    );
+
+    field.appendChild(
+        center
+    );
+
+    const nodeCount =
+        Math.min(
+            48,
+            Math.max(
+                12,
+                Number(
+                    data?.sessions ?? 0
+                )
+            )
+        );
+
+    for (
+        let index = 0;
+        index < nodeCount;
+        index += 1
+    ) {
+        const node =
+            createElement(
+                "div",
+                "demo-memory-node"
+            );
+
+        const angle =
+            (index / nodeCount) *
+            Math.PI *
+            2;
+
+        const radius =
+            32 +
+            (index % 4) * 5;
+
+        const x =
+            50 +
+            Math.cos(angle) *
+            radius;
+
+        const y =
+            50 +
+            Math.sin(angle) *
+            radius *
+            0.62;
+
+        node.style.left =
+            `${x}%`;
+
+        node.style.top =
+            `${y}%`;
+
+        node.style.animationDelay =
+            `${index * 70}ms`;
+
+        field.appendChild(
+            node
+        );
+    }
+
+    shell.appendChild(
+        field
+    );
+
+    demoNarration(
+        shell,
+        "PERSISTENT CONTEXT",
+        [
+            `${data?.memories ?? 0} memories`,
+            `${data?.sessions ?? 0} sessions`,
+            `${data?.messages ?? 0} messages`,
+            `${data?.reminders ?? 0} reminders`,
+        ].join(
+            "  ·  "
+        )
+    );
+}
+
+function renderDemoDeployment(
+    update
+) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoHeading(
+        shell,
+        "DEPLOYMENT",
+        "The system can maintain itself.",
+        "Repository state and automated deployment"
+    );
+
+    demoCorners(
+        shell,
+        "DEPLOYMENT // GIT",
+        update?.environment
+            ? String(
+                update.environment
+            ).toUpperCase()
+            : "UNKNOWN",
+        update?.schedule ??
+            "SCHEDULE UNKNOWN",
+        update?.status === "development"
+            ? "DEVELOPMENT"
+            : "DEPLOYED"
+    );
+
+    const deployment =
+        createElement(
+            "div",
+            "demo-deployment"
+        );
+
+    deployment.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-track"
+        )
+    );
+
+    const local =
+        createElement(
+            "div",
+            "demo-deployment-node local"
+        );
+
+    local.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-label",
+            "LOCAL"
+        )
+    );
+
+    local.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-value",
+            update?.branch ??
+                "UNKNOWN"
+        )
+    );
+
+    local.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-meta",
+            `VERSION ${update?.commit ?? "UNKNOWN"}`
+        )
+    );
+
+    const remote =
+        createElement(
+            "div",
+            "demo-deployment-node remote"
+        );
+
+    remote.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-label",
+            "REMOTE"
+        )
+    );
+
+    remote.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-value",
+            update?.remote ??
+                "UNKNOWN"
+        )
+    );
+
+    remote.appendChild(
+        createElement(
+            "div",
+            "demo-deployment-meta",
+            update?.current
+                ? "CURRENT"
+                : update?.local_changes
+                    ? "LOCAL CHANGES DETECTED"
+                    : "REMOTE STATE"
+        )
+    );
+
+    deployment.appendChild(
+        local
+    );
+
+    deployment.appendChild(
+        remote
+    );
+
+    shell.appendChild(
+        deployment
+    );
+
+    demoNarration(
+        shell,
+        "AUTOMATED DEPLOYMENT",
+        update?.local_changes
+            ? "Local changes detected. Automatic update protection is active."
+            : `Repository state is ${update?.current ? "current" : "not current"}.`
+    );
+}
+
+function renderDemoCapabilities() {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoHeading(
+        shell,
+        "CAPABILITIES",
+        "This is where L.U.N.A. gets useful.",
+        "A live assistant should do more than display information."
+    );
+
+    demoCorners(
+        shell,
+        "CAPABILITY MATRIX",
+        "INTERACTIVE",
+        "VOICE // CONTROL // TOOLS",
+        "READY"
+    );
+
+    const matrix =
+        createElement(
+            "div",
+            "demo-capabilities"
+        );
+
+    const labels = [
+        "VOICE",
+        "LISTENING",
+        "SYSTEM CONTROL",
+        "MEMORY",
+        "LOCAL INTELLIGENCE",
+        "RESEARCH",
+    ];
+
+    labels.forEach(
+        (label, index) => {
+            const node =
+                createElement(
+                    "div",
+                    "demo-capability"
+                );
+
+            node.textContent =
+                label;
+
+            node.style.animationDelay =
+                `${index * 120}ms`;
+
+            matrix.appendChild(
+                node
+            );
+        }
+    );
+
+    const core =
+        createElement(
+            "div",
+            "demo-capability core"
+        );
+
+    core.textContent =
+        "L.U.N.A. // READY";
+
+    matrix.appendChild(
+        core
+    );
+
+    shell.appendChild(
+        matrix
+    );
+
+    demoNarration(
+        shell,
+        "LIVE CAPABILITY",
+        "L.U.N.A. can listen, speak, control runtime functions, retain context, use local intelligence, and present information visually."
+    );
+
+    /*
+       Safe live capability demonstration:
+       briefly read the current volume without
+       changing the user's setting.
+    */
+
+    getStatus()
+        .then(status => {
+            if (!demoRunning) return;
+
+            const conversation =
+                status?.conversation;
+
+            if (conversation) {
+                demoNarration(
+                    shell,
+                    "LIVE RUNTIME",
+                    conversation.active
+                        ? "Conversation runtime is active."
+                        : "Conversation runtime is standing by."
+                );
+            }
+        })
+        .catch(() => {});
+}
+
+function renderDemoFinale() {
+    const shell =
+        createDemoShell();
+
+    if (!shell) return;
+
+    demoCorners(
+        shell,
+        "L.U.N.A. // COMPLETE",
+        "SYSTEM ONLINE",
+        "LOWKEY USEFUL NEURAL ASSISTANT",
+        "READY"
+    );
+
+    const finale =
+        createElement(
+            "div",
+            "demo-finale"
+        );
+
+    finale.appendChild(
+        createElement(
+            "div",
+            "demo-finale-logo",
+            "L.U.N.A."
+        )
+    );
+
+    finale.appendChild(
+        createElement(
+            "div",
+            "demo-finale-status",
+            "VOICE · MEMORY · TOOLS · LOCAL AI · CONTROL"
+        )
+    );
+
+    shell.appendChild(
+        finale
+    );
+
+    demoNarration(
+        shell,
+        "DEMONSTRATION COMPLETE",
+        "That's L.U.N.A."
+    );
+}
+
+async function runDemoStep() {
+    if (!demoRunning) {
+        return;
+    }
+
+    const step =
+        DEMO_STEPS[
+            demoStepIndex
+        ];
+
+    if (!step) {
+        finishDemo();
+        return;
+    }
+
+    try {
+        switch (step.id) {
+            case "intro":
+                renderDemoIntro();
+                break;
+
+            case "runtime": {
+                const system =
+                    await getSystem();
+
+                if (demoRunning) {
+                    renderDemoRuntime(
+                        system
+                    );
+                }
+
+                break;
+            }
+
+            case "services": {
+                const services =
+                    await getServices();
+
+                if (demoRunning) {
+                    renderDemoServices(
+                        services
+                    );
+                }
+
+                break;
+            }
+
+            case "intelligence": {
+                const status =
+                    await getStatus();
+
+                if (demoRunning) {
+                    renderDemoIntelligence(
+                        status
+                    );
+                }
+
+                break;
+            }
+
+            case "memory": {
+                const data =
+                    await getDataStatus();
+
+                if (demoRunning) {
+                    renderDemoMemory(
+                        data
+                    );
+                }
+
+                break;
+            }
+
+            case "deployment": {
+                const update =
+                    await getUpdateStatus();
+
+                if (demoRunning) {
+                    renderDemoDeployment(
+                        update
+                    );
+                }
+
+                break;
+            }
+
+            case "capabilities":
+                renderDemoCapabilities();
+                break;
+
+            case "finale":
+                renderDemoFinale();
+                break;
+
+            default:
+                break;
+        }
+    } catch (error) {
+        console.error(
+            "[L.U.N.A.] Demo step failed:",
+            error
+        );
+    }
+
+    if (!demoRunning) {
+        return;
+    }
+
+    demoTimeout =
+        window.setTimeout(
+            () => {
+                demoTimeout = null;
+
+                demoStepIndex += 1;
+
+                runDemoStep();
+            },
+            step.duration
+        );
+}
+
+function startDemo() {
+    if (demoRunning) {
+        return;
+    }
+
+    demoRunning = true;
+    demoStepIndex = 0;
+
+    clearDemoTimer();
+
+    setDemoState(
+        "RUNNING",
+        true
+    );
+
+    closeSettingsForDemo();
+
+    hideAllStateViews();
+
+    show(
+        "canvas-presentation"
+    );
+
+    runDemoStep();
+}
+
+function finishDemo() {
+    clearDemoTimer();
+
+    demoRunning = false;
+    demoStepIndex = 0;
+
+    setDemoState(
+        "READY",
+        false
+    );
+
+    destroyDemoShell();
+
+    if (latestTelemetry?.dashboard) {
+        const dashboard =
+            latestTelemetry.dashboard;
+
+        renderState(
+            dashboard.state ?? "idle",
+            dashboard.status?.message
+        );
+    } else {
+        renderState(
+            "idle"
+        );
+    }
+}
+
+function stopDemo() {
+    if (!demoRunning) {
+        return;
+    }
+
+    clearDemoTimer();
+
+    demoRunning = false;
+    demoStepIndex = 0;
+
+    setDemoState(
+        "READY",
+        false
+    );
+
+    destroyDemoShell();
+
+    if (latestTelemetry?.dashboard) {
+        const dashboard =
+            latestTelemetry.dashboard;
+
+        renderState(
+            dashboard.state ?? "idle",
+            dashboard.status?.message
+        );
+    } else {
+        renderState(
+            "idle"
+        );
+    }
 }
 
 
@@ -1258,11 +3074,30 @@ async function restartAgent() {
 }
 
 async function reconnect() {
-    showToast(
-        "Reconnecting voice systems..."
+    const confirmed = window.confirm(
+        "Reboot L.U.N.A.?\n\nThe Raspberry Pi will restart and all L.U.N.A. services will go offline temporarily."
     );
 
-    await restartAgent();
+    if (!confirmed) {
+        return;
+    }
+
+    showToast("Rebooting L.U.N.A....");
+
+    try {
+        await postJson(
+            "/api/control",
+            {
+                action: "reboot",
+                payload: {},
+            }
+        );
+    } catch (error) {
+        showToast(
+            error.message,
+            "warning"
+        );
+    }
 }
 
 function updateControlState() {
@@ -1291,6 +3126,42 @@ function wireControls() {
         ?.addEventListener(
             "click",
             reconnect
+        );
+
+    byId("stop-button")
+        ?.addEventListener(
+            "click",
+            async () => {
+
+                if (demoRunning) {
+                    stopDemo();
+
+                    showToast(
+                        "L.U.N.A. demo stopped."
+                    );
+
+                    return;
+                }
+
+                try {
+                    await postJson(
+                        "/api/control",
+                        {
+                            action: "stop",
+                            payload: {},
+                        }
+                    );
+
+                    showToast(
+                        "L.U.N.A. stopped."
+                    );
+                } catch (error) {
+                    showToast(
+                        error.message,
+                        "warning"
+                    );
+                }
+            }
         );
 
     byId("restart-button")
@@ -1405,6 +3276,46 @@ function wireControls() {
             }
         });
     }
+
+    byId("settings-button")
+        ?.addEventListener(
+            "click",
+            () => {
+                byId("settings-overlay")
+                    ?.classList.remove("hidden");
+            }
+        );
+
+    byId("settings-close")
+        ?.addEventListener(
+            "click",
+            () => {
+                byId("settings-overlay")
+                    ?.classList.add("hidden");
+            }
+        );
+
+    byId("settings-overlay")
+        ?.addEventListener(
+            "click",
+            (event) => {
+                if (
+                    event.target ===
+                    byId("settings-overlay")
+                ) {
+                    byId("settings-overlay")
+                        ?.classList.add("hidden");
+                }
+            }
+        );
+
+    byId("settings-demo-button")
+        ?.addEventListener(
+            "click",
+            () => {
+                startDemo();
+            }
+        );
 }
 
 
@@ -1481,16 +3392,18 @@ function renderTelemetry(
             data: {},
         };
 
-    const presentationActive =
-        renderPresentation(
-            presentation
-        );
+    if (!demoRunning) {
+        const presentationActive =
+            renderPresentation(
+                presentation
+            );
 
-    if (!presentationActive) {
-        renderState(
-            state,
-            dashboard.status?.message
-        );
+        if (!presentationActive) {
+            renderState(
+                state,
+                dashboard.status?.message
+            );
+        }
     }
 
     setText(
@@ -1543,6 +3456,36 @@ async function refreshTelemetry() {
         renderServices(
             services
         );
+
+        renderServicesSettings(
+            services
+        );
+
+        const system = await getSystem();
+        renderSystemSettings(system);
+        renderNetworkSettings(system);
+
+        const status = await getStatus();
+        renderAISettings(status);
+
+        getDataStatus()
+            .then((dataStatus) => {
+                renderDataSettings(dataStatus);
+            })
+            .catch((error) => {
+                console.error(
+                    "[L.U.N.A.] Data status failed:",
+                    error
+                );
+            });
+
+        getUpdateStatus()
+            .then((updateStatus) => {
+                renderUpdateSettings(updateStatus);
+            })
+            .catch((error) => {
+                console.error("[L.U.N.A.] Update status failed:", error);
+            });
 
     } catch (error) {
         console.error(

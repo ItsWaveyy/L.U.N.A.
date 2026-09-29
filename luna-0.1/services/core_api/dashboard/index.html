@@ -135,14 +135,435 @@
                     <span class="command-label">SETTINGS</span>
                 </button>
 
+                <div
+                    id="settings-overlay"
+                    class="settings-overlay hidden"
+                >
+                    <section
+                        id="settings-panel"
+                        class="settings-panel"
+                        aria-label="L.U.N.A. Control Center"
+                    >
+                        <div class="settings-header">
+                            <div>
+                                <div class="settings-eyebrow">
+                                    L.U.N.A. CONTROL CENTER
+                                </div>
+                                <h2>Settings</h2>
+                            </div>
+
+                            <button
+                                id="settings-close"
+                                class="settings-close"
+                                type="button"
+                                aria-label="Close settings"
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        <div
+                            id="settings-content"
+                            class="settings-content"
+                        >
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            SYSTEM
+                                        </div>
+                                        <h3>Runtime</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-system-state"
+                                        class="settings-status"
+                                    >
+                                        —
+                                    </span>
+                                </div>
+
+                                <div class="settings-metrics">
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            CPU
+                                        </span>
+                                        <span
+                                            id="settings-cpu"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            MEMORY
+                                        </span>
+                                        <span
+                                            id="settings-memory"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            TEMPERATURE
+                                        </span>
+                                        <span
+                                            id="settings-temperature"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            UPTIME
+                                        </span>
+                                        <span
+                                            id="settings-uptime"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            STORAGE
+                                        </span>
+                                        <span
+                                            id="settings-storage"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            SERVICES
+                                        </div>
+                                        <h3>Diagnostics</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-services-state"
+                                        class="settings-status"
+                                    >
+                                        —
+                                    </span>
+                                </div>
+
+                                <div
+                                    id="settings-services"
+                                    class="settings-service-list"
+                                >
+                                    <div class="settings-service-row">
+                                        <span class="settings-service-name">
+                                            Loading...
+                                        </span>
+
+                                        <span class="settings-service-state">
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            INTELLIGENCE
+                                        </div>
+                                        <h3>AI Systems</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-ai-state"
+                                        class="settings-status"
+                                    >
+                                        —
+                                    </span>
+                                </div>
+
+                                <div class="settings-metrics">
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            MODE
+                                        </span>
+                                        <span
+                                            id="settings-ai-mode"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            PROVIDERS
+                                        </span>
+                                        <span
+                                            id="settings-ai-providers"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            CONVERSATION
+                                        </span>
+                                        <span
+                                            id="settings-ai-conversation"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            IMPROVEMENT
+                                        </span>
+                                        <span
+                                            id="settings-ai-improvement"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div
+                                    id="settings-ai-providers-list"
+                                    class="settings-service-list"
+                                >
+                                    <div class="settings-service-row">
+                                        <span class="settings-service-name">
+                                            Loading...
+                                        </span>
+
+                                        <span class="settings-service-state">
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            NETWORK
+                                        </div>
+                                        <h3>Host</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-network-state"
+                                        class="settings-status"
+                                    >
+                                        —
+                                    </span>
+                                </div>
+
+                                <div class="settings-metrics">
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            HOSTNAME
+                                        </span>
+                                        <span
+                                            id="settings-hostname"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            NETWORK
+                                        </span>
+                                        <span
+                                            id="settings-network"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            DATA
+                                        </div>
+                                        <h3>Memory &amp; Archive</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-data-state"
+                                        class="settings-status"
+                                    >
+                                        —
+                                    </span>
+                                </div>
+
+                                <div class="settings-metrics">
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            MEMORIES
+                                        </span>
+                                        <span
+                                            id="settings-memory-count"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            SESSIONS
+                                        </span>
+                                        <span
+                                            id="settings-session-count"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            MESSAGES
+                                        </span>
+                                        <span
+                                            id="settings-message-count"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                        <span class="settings-metric-label">
+                                            REMINDERS
+                                        </span>
+                                        <span
+                                            id="settings-reminder-count"
+                                            class="settings-metric-value"
+                                        >
+                                            —
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                    <div class="settings-section-eyebrow">UPDATE</div>
+                                    <h3>Deployment</h3>
+                                    </div>
+
+                                    <span id="settings-update-state" class="settings-status">—</span>
+                                </div>
+
+                                <div class="settings-metrics">
+                                    <div class="settings-metric">
+                                    <span class="settings-metric-label">BRANCH</span>
+                                    <span id="settings-update-branch" class="settings-metric-value">—</span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                    <span class="settings-metric-label">VERSION</span>
+                                    <span id="settings-update-version" class="settings-metric-value">—</span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                    <span class="settings-metric-label">REMOTE</span>
+                                    <span id="settings-update-remote" class="settings-metric-value">—</span>
+                                    </div>
+
+                                    <div class="settings-metric">
+                                    <span class="settings-metric-label">SCHEDULE</span>
+                                    <span id="settings-update-schedule" class="settings-metric-value">—</span>
+                                    </div>
+                                </div>
+
+                                <div class="settings-section-footer">
+                                    <span>LAST UPDATE</span>
+                                    <span id="settings-update-last">—</span>
+                                </div>
+
+                                <div
+                                    id="settings-update-warning"
+                                    class="settings-section-note hidden"
+                                >
+                                    Local changes detected — automatic update protection active.
+                                </div>
+                            </div>
+
+                            <div class="settings-section">
+                                <div class="settings-section-header">
+                                    <div>
+                                        <div class="settings-section-eyebrow">
+                                            DEMO
+                                        </div>
+
+                                        <h3>System Demonstration</h3>
+                                    </div>
+
+                                    <span
+                                        id="settings-demo-state"
+                                        class="settings-status"
+                                    >
+                                        READY
+                                    </span>
+                                </div>
+
+                                <div class="settings-demo-content">
+                                    <div class="settings-demo-description">
+                                        Walk through L.U.N.A.'s current runtime,
+                                        services, intelligence, memory, deployment,
+                                        and capabilities.
+                                    </div>
+
+                                    <button
+                                        id="settings-demo-button"
+                                        class="settings-demo-button"
+                                        type="button"
+                                    >
+                                        RUN DEMO
+                                    </button>
+                                </div>
+                            </div>
+                    </section>
+                </div>
+
                 <button
                     id="reconnect-button"
                     class="command-button"
                     type="button"
-                    aria-label="Reconnect L.U.N.A."
+                    aria-label="Reboot L.U.N.A."
                 >
                     <span class="command-icon">↻</span>
-                    <span class="command-label">RECONNECT</span>
+                    <span class="command-label">REBOOT</span>
                 </button>
 
             </div>

@@ -1,0 +1,21 @@
+platform: macos
+architecture: arm64
+device: mac
+python: "3.13"
+
+audio:
+  backend: coreaudio
+  input: system
+  output: system
+
+services:
+  manager: launchd
+
+capabilities:
+  local_audio: true
+  local_tts: true
+  local_llm: true
+
+local_llm:
+  runtime: ollama
+  model: qwen3:1.7b

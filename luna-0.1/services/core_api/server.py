@@ -216,11 +216,294 @@ def create_core_api(runtime=None) -> FastAPI:
 
         return runtime.system_monitor.as_dict()
 
+    @app.get("/api/data")
+    async def data_status() -> dict[str, Any]:
+        runtime = get_runtime()
+
+        database_path = (
+            runtime.core.conversations.database_path
+        )
+
+        if not database_path.exists():
+            return {
+                "status": "unavailable",
+                "memories": 0,
+                "sessions": 0,
+                "messages": 0,
+                "reminders": 0,
+            }
+
+        import sqlite3
+
+        connection = sqlite3.connect(
+            database_path
+        )
+
+        try:
+            memories = connection.execute(
+                "SELECT COUNT(*) FROM memories"
+            ).fetchone()[0]
+
+            sessions = connection.execute(
+                "SELECT COUNT(*) FROM conversation_sessions"
+            ).fetchone()[0]
+
+            messages = connection.execute(
+                "SELECT COUNT(*) FROM conversation_messages"
+            ).fetchone()[0]
+
+            reminders = connection.execute(
+                "SELECT COUNT(*) FROM reminders"
+            ).fetchone()[0]
+
+            return {
+                "status": "online",
+                "memories": memories,
+                "sessions": sessions,
+                "messages": messages,
+                "reminders": reminders,
+            }
+
+        finally:
+            connection.close()
+
     @app.get("/api/dashboard")
     async def dashboard() -> dict[str, Any]:
         runtime = get_runtime()
 
         return runtime.dashboard.snapshot()
+
+    @app.get("/api/update")
+    async def update_status() -> dict[str, Any]:
+        def run_command(
+            command: list[str],
+            timeout: int = 5,
+        ) -> str:
+            try:
+                result = subprocess.run(
+                    command,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                    check=False,
+                )
+                return result.stdout.strip()
+            except Exception:
+                return ""
+
+        def format_timestamp(value: str) -> str:
+            if not value:
+                return "—"
+
+            try:
+                parts = value.split()
+
+                # systemd format:
+                # "Sun 2026-09-28 20:41:12 EDT"
+                if len(parts) >= 4:
+                    date = parts[1]
+                    time = parts[2]
+                    zone = parts[3]
+
+                    from datetime import datetime
+
+                    parsed = datetime.strptime(
+                        f"{date} {time}",
+                        "%Y-%m-%d %H:%M:%S",
+                    )
+
+                    return (
+                        f"{parsed.strftime('%b %-d, %-I:%M %p')} "
+                        f"{zone}"
+                    )
+            except Exception:
+                pass
+
+            return value
+
+        current_platform = platform.system()
+
+        # ---------------------------------------------------------
+        # Development environment (macOS)
+        # ---------------------------------------------------------
+        if current_platform == "Darwin":
+            repo_path = Path(__file__).resolve().parents[3]
+
+            branch = run_command(
+                [
+                    "git",
+                    "-C",
+                    str(repo_path),
+                    "branch",
+                    "--show-current",
+                ]
+            )
+
+            commit = run_command(
+                [
+                    "git",
+                    "-C",
+                    str(repo_path),
+                    "rev-parse",
+                    "--short",
+                    "HEAD",
+                ]
+            )
+
+            remote = run_command(
+                [
+                    "git",
+                    "-C",
+                    str(repo_path),
+                    "rev-parse",
+                    "--short",
+                    f"origin/{branch}",
+                ]
+            ) if branch else ""
+
+            status = run_command(
+                [
+                    "git",
+                    "-C",
+                    str(repo_path),
+                    "status",
+                    "--porcelain",
+                ]
+            )
+
+            return {
+                "status": "development",
+                "environment": "macos",
+                "branch": branch or "—",
+                "commit": commit or "—",
+                "remote": remote or "—",
+                "current": bool(
+                    commit
+                    and remote
+                    and commit == remote
+                ),
+                "local_changes": bool(status),
+                "last_result": "—",
+                "last_update": "—",
+                "next_run": "—",
+                "schedule": "Pi updater only",
+            }
+
+        # ---------------------------------------------------------
+        # Raspberry Pi deployment environment
+        # ---------------------------------------------------------
+        repo_path = Path("/mnt/luna")
+
+        branch = run_command(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "branch",
+                "--show-current",
+            ]
+        )
+
+        commit = run_command(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "rev-parse",
+                "--short",
+                "HEAD",
+            ]
+        )
+
+        remote = run_command(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "rev-parse",
+                "--short",
+                "origin/main",
+            ]
+        )
+
+        status = run_command(
+            [
+                "git",
+                "-C",
+                str(repo_path),
+                "status",
+                "--porcelain",
+            ]
+        )
+
+        timer = run_command(
+            [
+                "systemctl",
+                "--user",
+                "show",
+                "luna-updater.timer",
+                "--property=NextElapseUSecRealtime",
+                "--value",
+            ]
+        )
+
+        service_status = run_command(
+            [
+                "systemctl",
+                "--user",
+                "show",
+                "luna-updater.service",
+                "--property=Result",
+                "--value",
+            ]
+        )
+
+        service_time = run_command(
+            [
+                "systemctl",
+                "--user",
+                "show",
+                "luna-updater.service",
+                "--property=ExecMainExitTimestamp",
+                "--value",
+            ]
+        )
+
+        # If the deployment repo/updater does not exist,
+        # report the updater as unavailable rather than returning
+        # misleading placeholder Git information.
+        if not repo_path.exists() or not branch or not commit:
+            return {
+                "status": "unavailable",
+                "environment": "linux",
+                "branch": "—",
+                "commit": "—",
+                "remote": "—",
+                "current": False,
+                "local_changes": False,
+                "last_result": "unknown",
+                "last_update": "—",
+                "next_run": "—",
+                "schedule": "Every 15 min",
+            }
+
+        return {
+            "status": "online",
+            "environment": "linux",
+            "branch": branch or "—",
+            "commit": commit or "—",
+            "remote": remote or "—",
+            "current": bool(
+                commit
+                and remote
+                and commit == remote
+            ),
+            "local_changes": bool(status),
+            "last_result": service_status or "unknown",
+            "last_update": format_timestamp(service_time),
+            "next_run": format_timestamp(timer),
+            "schedule": "Every 15 min",
+        }
 
     @app.get("/api/dashboard/state")
     async def dashboard_state() -> dict[str, Any]:
@@ -469,6 +752,28 @@ def create_core_api(runtime=None) -> FastAPI:
 
         action = request.action.strip().lower()
         payload = request.payload or {}
+
+        if action == "reboot":
+            result = subprocess.run(
+                ["sudo", "systemctl", "reboot"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            if result.returncode != 0:
+                raise HTTPException(
+                    status_code=500,
+                    detail=(
+                        result.stderr.strip()
+                        or "Reboot request failed."
+                    ),
+                )
+
+            return {
+                "status": "accepted",
+                "action": "reboot",
+            }
 
         if action == "stop":
 
