@@ -10,6 +10,24 @@ let demoRunning = false;
 let demoStepIndex = 0;
 let demoTimeout = null;
 
+let memoryAnimationFrame = null;
+let memoryResizeObserver = null;
+
+function stopMemoryAnimation() {
+    if (memoryAnimationFrame !== null) {
+        cancelAnimationFrame(
+            memoryAnimationFrame
+        );
+
+        memoryAnimationFrame = null;
+    }
+
+    if (memoryResizeObserver) {
+        memoryResizeObserver.disconnect();
+        memoryResizeObserver = null;
+    }
+}
+
 
 /* =========================================================
    BASIC HELPERS
@@ -1046,7 +1064,7 @@ const DEMO_STEPS = [
     { id: "runtime", duration: 5200 },
     { id: "services", duration: 5600 },
     { id: "intelligence", duration: 5600 },
-    { id: "memory", duration: 5200 },
+    { id: "memory", duration: 16000 },
     { id: "deployment", duration: 5200 },
     { id: "capabilities", duration: 6200 },
     { id: "finale", duration: 3600 },
@@ -1114,6 +1132,8 @@ function createDemoShell() {
         return null;
     }
 
+    stopMemoryAnimation();
+
     clearPresentation();
 
     presentation.classList.add(
@@ -1132,6 +1152,8 @@ function createDemoShell() {
 }
 
 function destroyDemoShell() {
+    stopMemoryAnimation();
+
     const presentation =
         byId("canvas-presentation");
 
@@ -1759,6 +1781,13 @@ function renderDemoIntelligence(
 function renderDemoMemory(
     data
 ) {
+    const shell =
+        createDemoShell();
+
+    if (!shell) {
+        return;
+    }
+
     const sessions =
         Number(data?.sessions) || 0;
 
@@ -1771,215 +1800,1304 @@ function renderDemoMemory(
     const reminders =
         Number(data?.reminders) || 0;
 
-    const visualNodes =
-        Math.min(
-            42,
+    /*
+     * -----------------------------------------------------
+     * MEMORY UNIVERSE
+     *
+     * The same particles exist in both states:
+     *
+     *   CONVERSATION FIELD
+     *          ↓
+     *   MEMORY ORGANIZATION
+     *          ↓
+     *   MEMORY STRUCTURE
+     *
+     * Nothing fades into a separate visualization.
+     * The particles themselves physically reorganize.
+     * -----------------------------------------------------
+     */
+
+    const visual =
+        createElement(
+            "div",
+            "demo-memory-visual"
+        );
+
+    visual.innerHTML = `
+        <canvas
+            class="demo-memory-canvas"
+        ></canvas>
+
+        <div
+            class="demo-memory-readout"
+        >
+            <div
+                class="demo-memory-readout-label"
+            >
+                ARCHIVE STATE
+            </div>
+
+            <div
+                class="demo-memory-readout-phase"
+            >
+                CONVERSATION FIELD
+            </div>
+        </div>
+
+        <div
+            class="demo-memory-count"
+        >
+            ${memories}
+            <span>MEMORIES</span>
+        </div>
+    `;
+
+    shell.appendChild(
+        visual
+    );
+
+    demoNarration(
+        shell,
+        "MEMORY & ARCHIVE",
+        `${sessions} sessions stored. · ` +
+        `${memories} memories · ` +
+        `${messages} messages · ` +
+        `${reminders} reminders`
+    );
+
+    const canvas =
+        visual.querySelector(
+            ".demo-memory-canvas"
+        );
+
+    const phaseLabel =
+        visual.querySelector(
+            ".demo-memory-readout-phase"
+        );
+
+    const context =
+        canvas?.getContext("2d");
+
+    if (!canvas || !context) {
+        return;
+    }
+
+    /*
+     * -----------------------------------------------------
+     * CANVAS SETUP
+     * -----------------------------------------------------
+     */
+
+    let width = 1;
+    let height = 1;
+    let pixelRatio = 1;
+
+    function resizeCanvas() {
+        const rect =
+            visual.getBoundingClientRect();
+
+        width =
             Math.max(
-                12,
+                1,
+                rect.width
+            );
+
+        height =
+            Math.max(
+                1,
+                rect.height
+            );
+
+        pixelRatio =
+            Math.min(
+                2,
+                window.devicePixelRatio || 1
+            );
+
+        canvas.width =
+            Math.floor(
+                width * pixelRatio
+            );
+
+        canvas.height =
+            Math.floor(
+                height * pixelRatio
+            );
+
+        canvas.style.width =
+            `${width}px`;
+
+        canvas.style.height =
+            `${height}px`;
+
+        context.setTransform(
+            pixelRatio,
+            0,
+            0,
+            pixelRatio,
+            0,
+            0
+        );
+    }
+
+    resizeCanvas();
+
+    if (
+        typeof ResizeObserver !==
+        "undefined"
+    ) {
+        memoryResizeObserver =
+            new ResizeObserver(
+                resizeCanvas
+            );
+
+        memoryResizeObserver.observe(
+            visual
+        );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * DETERMINISTIC RANDOMNESS
+     *
+     * The same database state produces the same particle
+     * arrangement instead of a completely different galaxy
+     * every time the demo runs.
+     * -----------------------------------------------------
+     */
+
+    let seed =
+        (
+            sessions * 73856093 ^
+            messages * 19349663 ^
+            memories * 83492791 ^
+            reminders * 2654435761
+        ) >>> 0;
+
+    function random() {
+        seed =
+            (
+                seed * 1664525 +
+                1013904223
+            ) >>> 0;
+
+        return (
+            seed / 4294967296
+        );
+    }
+
+    /*
+     * More conversations = denser field.
+     *
+     * We deliberately keep the visual within a sane range
+     * so a huge message count doesn't turn the demo into
+     * a performance test.
+     */
+
+    const particleCount =
+        Math.min(
+            108,
+            Math.max(
+                76,
+                76 +
                 Math.round(
-                    12 +
-                    Math.sqrt(
+                    Math.log10(
                         Math.max(
-                            sessions,
+                            messages,
                             1
-                        )
-                    ) * 4
+                        ) + 1
+                    ) * 10
                 )
             )
         );
 
     const particles = [];
 
-    for (
-        let index = 0;
-        index < visualNodes;
-        index += 1
+    /*
+     * -----------------------------------------------------
+     * 3D ROTATION
+     * -----------------------------------------------------
+     */
+
+    function rotate3D(
+        point,
+        rotateX,
+        rotateY,
+        rotateZ
     ) {
-        const angle =
-            (Math.PI * 2 * index) /
-            visualNodes;
+        let x = point.x;
+        let y = point.y;
+        let z = point.z;
 
-        const radius =
-            30 +
-            ((index * 17) % 40);
+        const cosX =
+            Math.cos(rotateX);
 
-        const x =
-            50 +
-            Math.cos(angle) * radius;
-
-        const y =
-            50 +
-            Math.sin(angle) *
-                radius *
-                0.62;
-
-        particles.push(`
-            <i
-                class="demo-memory-particle"
-                style="
-                    left:${x.toFixed(2)}%;
-                    top:${y.toFixed(2)}%;
-                    --memory-delay:${(
-                        (index % 8) * 0.18
-                    ).toFixed(2)}s;
-                    --memory-opacity:${(
-                        0.32 +
-                        ((index % 5) * 0.10)
-                    ).toFixed(2)};
-                "
-            ></i>
-        `);
-    }
-
-    const connections = [];
-
-    for (
-        let index = 0;
-        index < visualNodes - 1;
-        index += 2
-    ) {
-        const angleA =
-            (Math.PI * 2 * index) /
-            visualNodes;
-
-        const angleB =
-            (Math.PI * 2 * (index + 1)) /
-            visualNodes;
-
-        const radiusA =
-            30 +
-            ((index * 17) % 40);
-
-        const radiusB =
-            30 +
-            (((index + 1) * 17) % 40);
-
-        const x1 =
-            50 +
-            Math.cos(angleA) * radiusA;
+        const sinX =
+            Math.sin(rotateX);
 
         const y1 =
-            50 +
-            Math.sin(angleA) *
-                radiusA *
-                0.62;
+            y * cosX -
+            z * sinX;
+
+        const z1 =
+            y * sinX +
+            z * cosX;
+
+        y = y1;
+        z = z1;
+
+        const cosY =
+            Math.cos(rotateY);
+
+        const sinY =
+            Math.sin(rotateY);
 
         const x2 =
-            50 +
-            Math.cos(angleB) * radiusB;
+            x * cosY -
+            z * sinY;
 
-        const y2 =
-            50 +
-            Math.sin(angleB) *
-                radiusB *
-                0.62;
+        const z2 =
+            x * sinY +
+            z * cosY;
 
-        const dx = x2 - x1;
-        const dy = y2 - y1;
+        x = x2;
+        z = z2;
 
-        const length =
-            Math.sqrt(
-                dx * dx +
-                dy * dy
-            );
+        const cosZ =
+            Math.cos(rotateZ);
 
-        const rotation =
-            Math.atan2(
-                dy,
-                dx
-            ) *
-            (180 / Math.PI);
+        const sinZ =
+            Math.sin(rotateZ);
 
-        connections.push(`
-            <i
-                class="demo-memory-connection"
-                style="
-                    left:${x1.toFixed(2)}%;
-                    top:${y1.toFixed(2)}%;
-                    width:${length.toFixed(2)}%;
-                    transform:
-                        rotate(${rotation.toFixed(2)}deg);
-                "
-            ></i>
-        `);
-    }
+        const x3 =
+            x * cosZ -
+            y * sinZ;
 
-    demoNarration(
-        "MEMORY & ARCHIVE",
-        `${sessions} sessions stored.`,
-        [
-            `${memories} memories`,
-            `${messages} messages`,
-            `${reminders} reminders`,
-        ].join("  ·  ")
-    );
+        const y3 =
+            x * sinZ +
+            y * cosZ;
 
-    const container =
-        byId(
-            "canvas-presentation"
-        );
-
-    if (!container) {
-        return;
+        return {
+            x: x3,
+            y: y3,
+            z,
+        };
     }
 
     /*
-     * The existing narration remains the actual
-     * demo information layer. We augment it with
-     * the memory visualization instead of replacing
-     * the working demo architecture.
+     * -----------------------------------------------------
+     * GALAXY COORDINATES
+     *
+     * Four loose spiral arms + central density.
+     * This is the "conversation" state.
+     * -----------------------------------------------------
      */
 
-    const narration =
-        container.querySelector(
-            ".demo-narration"
+    function createGalaxyPoint(
+        index
+    ) {
+        const arm =
+            index % 4;
+
+        const core =
+            index <
+            particleCount * 0.22;
+
+        if (core) {
+            const radius =
+                Math.pow(
+                    random(),
+                    1.8
+                ) * 0.42;
+
+            const angle =
+                random() *
+                Math.PI *
+                2;
+
+            return {
+                x:
+                    Math.cos(angle) *
+                    radius,
+
+                y:
+                    Math.sin(angle) *
+                    radius *
+                    0.42,
+
+                z:
+                    (random() - 0.5) *
+                    0.16,
+            };
+        }
+
+        const radial =
+            0.12 +
+            Math.pow(
+                random(),
+                0.82
+            ) * 1.02;
+
+        const angle =
+            (
+                arm *
+                (Math.PI * 2 / 4)
+            ) +
+            radial * 7.1 +
+            (random() - 0.5) *
+            0.55;
+
+        return {
+            x:
+                Math.cos(angle) *
+                radial,
+
+            y:
+                Math.sin(angle) *
+                radial *
+                0.44,
+
+            z:
+                (random() - 0.5) *
+                0.14 *
+                radial,
+        };
+    }
+
+    /*
+     * -----------------------------------------------------
+     * GYROSCOPE COORDINATES
+     *
+     * These are the DESTINATIONS of the exact same
+     * particles.
+     *
+     * Four orbital families create the spherical
+     * JARVIS-like structure.
+     * -----------------------------------------------------
+     */
+
+    const gyroRotations = [
+        [
+            1.10,
+            0.22,
+            0.10,
+        ],
+        [
+            0.42,
+            1.04,
+            -0.46,
+        ],
+        [
+            1.46,
+            -0.55,
+            0.72,
+        ],
+        [
+            0.78,
+            0.18,
+            -1.04,
+        ],
+    ];
+
+    function createGyroPoint(
+        index
+    ) {
+        const family =
+            index % 4;
+
+        const theta =
+            random() *
+            Math.PI *
+            2;
+
+        const radius =
+            0.72 +
+            random() *
+            0.30;
+
+        let point;
+
+        /*
+         * Every family starts as the same kind
+         * of orbital ellipse, then gets rotated into
+         * its own plane.
+         */
+
+        point = {
+            x:
+                Math.cos(theta) *
+                radius,
+
+            y:
+                Math.sin(theta) *
+                radius *
+                0.50,
+
+            z: 0,
+        };
+
+        const rotation =
+            gyroRotations[
+                family
+            ];
+
+        point =
+            rotate3D(
+                point,
+                rotation[0],
+                rotation[1],
+                rotation[2]
+            );
+
+        return {
+            ...point,
+            family,
+            theta,
+            radius,
+        };
+    }
+
+    for (
+        let index = 0;
+        index < particleCount;
+        index += 1
+    ) {
+        particles.push({
+            galaxy:
+                createGalaxyPoint(
+                    index
+                ),
+
+            gyro:
+                createGyroPoint(
+                    index
+                ),
+
+            size:
+                0.65 +
+                random() * 1.25,
+
+            brightness:
+                0.45 +
+                random() * 0.55,
+        });
+    }
+
+    /*
+     * -----------------------------------------------------
+     * MATH HELPERS
+     * -----------------------------------------------------
+     */
+
+    function clamp(
+        value,
+        minimum,
+        maximum
+    ) {
+        return Math.max(
+            minimum,
+            Math.min(
+                maximum,
+                value
+            )
+        );
+    }
+
+    function smoothstep(
+        value
+    ) {
+        const t =
+            clamp(
+                value,
+                0,
+                1
+            );
+
+        return (
+            t *
+            t *
+            (3 - 2 * t)
+        );
+    }
+
+    function lerp(
+        a,
+        b,
+        amount
+    ) {
+        return (
+            a +
+            (b - a) *
+            amount
+        );
+    }
+
+    function project(
+        point
+    ) {
+        /*
+         * A tiny perspective effect makes the final
+         * structure feel volumetric instead of flat.
+         */
+
+        const depth =
+            1 /
+            (
+                1.58 -
+                point.z * 0.30
+            );
+
+        const scale =
+            Math.min(
+                width,
+                height
+            ) * 0.37;
+
+        return {
+            x:
+                width / 2 +
+                point.x *
+                scale *
+                depth,
+
+            y:
+                height / 2 +
+                point.y *
+                scale *
+                depth,
+
+            depth,
+        };
+    }
+
+    /*
+     * -----------------------------------------------------
+     * FINAL GYRO POSITION
+     * -----------------------------------------------------
+     */
+
+    function getGyroPosition(
+        particle,
+        elapsed
+    ) {
+        const point =
+            particle.gyro;
+
+        const rotation =
+            gyroRotations[
+                point.family
+            ];
+
+        /*
+         * The rings slowly orbit around the core
+         * rather than spinning like a flat loading icon.
+         */
+
+        const orbitalSpin =
+            elapsed *
+            0.00018;
+
+        const wobble =
+            Math.sin(
+                elapsed *
+                0.00055 +
+                point.family
+            ) *
+            0.045;
+
+        return rotate3D(
+            point,
+            rotation[0] +
+                wobble,
+
+            rotation[1] +
+                orbitalSpin * 0.28,
+
+            rotation[2] +
+                orbitalSpin
+        );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * RING GUIDE GEOMETRY
+     *
+     * These are intentionally faint.
+     * The PARTICLES are the actual structure.
+     * -----------------------------------------------------
+     */
+
+    function getRingPoint(
+        family,
+        theta,
+        elapsed
+    ) {
+        const point = {
+            x:
+                Math.cos(theta),
+
+            y:
+                Math.sin(theta) *
+                0.50,
+
+            z: 0,
+        };
+
+        const rotation =
+            gyroRotations[
+                family
+            ];
+
+        const orbitalSpin =
+            elapsed *
+            0.00018;
+
+        return rotate3D(
+            point,
+            rotation[0],
+
+            rotation[1] +
+                orbitalSpin * 0.28,
+
+            rotation[2] +
+                orbitalSpin
+        );
+    }
+
+    /*
+     * -----------------------------------------------------
+     * DRAW
+     * -----------------------------------------------------
+     */
+
+    function drawFrame(
+        elapsed
+    ) {
+        context.clearRect(
+            0,
+            0,
+            width,
+            height
         );
 
-    if (!narration) {
+        /*
+         * Timeline:
+         *
+         * 0–3.5 sec
+         *     Galaxy / conversations
+         *
+         * 3.5–11.5 sec
+         *     Morph / organization
+         *
+         * 11.5–16 sec
+         *     Finished memory structure
+         */
+
+        const galaxyHold =
+            3500;
+
+        const morphDuration =
+            8000;
+
+        const morphProgress =
+            smoothstep(
+                (
+                    elapsed -
+                    galaxyHold
+                ) /
+                morphDuration
+            );
+
+        const gyroProgress =
+            clamp(
+                (
+                    elapsed -
+                    galaxyHold -
+                    morphDuration
+                ) /
+                4500,
+                0,
+                1
+            );
+
+        /*
+         * Phase label
+         */
+
+        if (phaseLabel) {
+            if (
+                morphProgress <
+                0.03
+            ) {
+                phaseLabel.textContent =
+                    "CONVERSATION FIELD";
+            } else if (
+                morphProgress <
+                0.88
+            ) {
+                phaseLabel.textContent =
+                    "ORGANIZING MEMORY";
+            } else {
+                phaseLabel.textContent =
+                    "MEMORY STRUCTURE";
+            }
+        }
+
+        /*
+         * Very subtle galaxy drift.
+         */
+
+        const galaxySpin =
+            elapsed *
+            0.000035;
+
+        const renderedPoints =
+            [];
+
+        /*
+         * -------------------------------------------------
+         * PARTICLES
+         * -------------------------------------------------
+         */
+
+        particles.forEach(
+            (
+                particle
+            ) => {
+                let galaxyPoint =
+                    rotate3D(
+                        particle.galaxy,
+                        0,
+                        0,
+                        galaxySpin
+                    );
+
+                const gyroPoint =
+                    getGyroPosition(
+                        particle,
+                        elapsed
+                    );
+
+                const point = {
+                    x:
+                        lerp(
+                            galaxyPoint.x,
+                            gyroPoint.x,
+                            morphProgress
+                        ),
+
+                    y:
+                        lerp(
+                            galaxyPoint.y,
+                            gyroPoint.y,
+                            morphProgress
+                        ),
+
+                    z:
+                        lerp(
+                            galaxyPoint.z,
+                            gyroPoint.z,
+                            morphProgress
+                        ),
+                };
+
+                const projected =
+                    project(
+                        point
+                    );
+
+                renderedPoints.push({
+                    ...projected,
+                    point,
+                    particle,
+                });
+            }
+        );
+
+        /*
+         * -------------------------------------------------
+         * GALAXY CONNECTIONS
+         *
+         * These disappear as the conversations become
+         * organized memory structures.
+         * -------------------------------------------------
+         */
+
+        if (
+            morphProgress < 0.82
+        ) {
+            context.save();
+
+            context.lineWidth = 0.7;
+
+            for (
+                let index = 0;
+                index <
+                    renderedPoints.length - 1;
+                index += 1
+            ) {
+                const a =
+                    renderedPoints[
+                        index
+                    ];
+
+                const b =
+                    renderedPoints[
+                        index + 1
+                    ];
+
+                const dx =
+                    b.x - a.x;
+
+                const dy =
+                    b.y - a.y;
+
+                const distance =
+                    Math.sqrt(
+                        dx * dx +
+                        dy * dy
+                    );
+
+                if (
+                    distance >
+                    Math.min(
+                        width,
+                        height
+                    ) * 0.18
+                ) {
+                    continue;
+                }
+
+                const alpha =
+                    (
+                        1 -
+                        morphProgress
+                    ) *
+                    0.13;
+
+                context.strokeStyle =
+                    `rgba(169, 140, 255, ${alpha})`;
+
+                context.beginPath();
+
+                context.moveTo(
+                    a.x,
+                    a.y
+                );
+
+                context.lineTo(
+                    b.x,
+                    b.y
+                );
+
+                context.stroke();
+            }
+
+            context.restore();
+        }
+
+        /*
+         * -------------------------------------------------
+         * ORBIT RINGS
+         *
+         * They emerge during the morph instead of
+         * existing from frame one.
+         * -------------------------------------------------
+         */
+
+        if (
+            morphProgress > 0.28
+        ) {
+            const ringAlpha =
+                smoothstep(
+                    (
+                        morphProgress -
+                        0.28
+                    ) /
+                    0.72
+                );
+
+            context.save();
+
+            context.lineWidth = 0.7;
+
+            for (
+                let family = 0;
+                family < 4;
+                family += 1
+            ) {
+                context.beginPath();
+
+                const segments = 72;
+
+                for (
+                    let index = 0;
+                    index <= segments;
+                    index += 1
+                ) {
+                    const theta =
+                        (
+                            index /
+                            segments
+                        ) *
+                        Math.PI *
+                        2;
+
+                    const point =
+                        getRingPoint(
+                            family,
+                            theta,
+                            elapsed
+                        );
+
+                    const projected =
+                        project(
+                            point
+                        );
+
+                    if (
+                        index === 0
+                    ) {
+                        context.moveTo(
+                            projected.x,
+                            projected.y
+                        );
+                    } else {
+                        context.lineTo(
+                            projected.x,
+                            projected.y
+                        );
+                    }
+                }
+
+                const alpha =
+                    (
+                        0.045 +
+                        gyroProgress *
+                        0.055
+                    ) *
+                    ringAlpha;
+
+                context.strokeStyle =
+                    `rgba(169, 140, 255, ${alpha})`;
+
+                context.stroke();
+            }
+
+            context.restore();
+        }
+
+        /*
+         * -------------------------------------------------
+         * PARTICLE GLOW
+         * -------------------------------------------------
+         */
+
+        context.save();
+
+        context.globalCompositeOperation =
+            "lighter";
+
+        renderedPoints.forEach(
+            ({
+                x,
+                y,
+                depth,
+                particle,
+            }) => {
+                const depthScale =
+                    clamp(
+                        0.72 +
+                        depth * 0.36,
+                        0.55,
+                        1.35
+                    );
+
+                const size =
+                    particle.size *
+                    depthScale;
+
+                const finalBoost =
+                    1 +
+                    morphProgress *
+                    0.35;
+
+                const alpha =
+                    (
+                        0.34 +
+                        particle.brightness *
+                        0.52
+                    ) *
+                    finalBoost;
+
+                /*
+                 * Soft halo
+                 */
+
+                context.fillStyle =
+                    `rgba(169, 140, 255, ${alpha * 0.22})`;
+
+                context.beginPath();
+
+                context.arc(
+                    x,
+                    y,
+                    size * 2.8,
+                    0,
+                    Math.PI * 2
+                );
+
+                context.fill();
+
+                /*
+                 * Actual particle
+                 */
+
+                context.fillStyle =
+                    `rgba(198, 181, 255, ${alpha})`;
+
+                context.beginPath();
+
+                context.arc(
+                    x,
+                    y,
+                    size,
+                    0,
+                    Math.PI * 2
+                );
+
+                context.fill();
+            }
+        );
+
+        context.restore();
+
+        /*
+         * -------------------------------------------------
+         * CENTRAL MEMORY CORE
+         * -------------------------------------------------
+         */
+
+        if (
+            morphProgress > 0.45
+        ) {
+            const coreAlpha =
+                smoothstep(
+                    (
+                        morphProgress -
+                        0.45
+                    ) /
+                    0.55
+                );
+
+            const centerX =
+                width / 2;
+
+            const centerY =
+                height / 2;
+
+            context.save();
+
+            context.globalCompositeOperation =
+                "lighter";
+
+            const glowRadius =
+                26 +
+                gyroProgress * 12;
+
+            const gradient =
+                context.createRadialGradient(
+                    centerX,
+                    centerY,
+                    0,
+                    centerX,
+                    centerY,
+                    glowRadius
+                );
+
+            gradient.addColorStop(
+                0,
+                `rgba(230, 220, 255, ${0.20 * coreAlpha})`
+            );
+
+            gradient.addColorStop(
+                0.22,
+                `rgba(169, 140, 255, ${0.11 * coreAlpha})`
+            );
+
+            gradient.addColorStop(
+                1,
+                "rgba(169, 140, 255, 0)"
+            );
+
+            context.fillStyle =
+                gradient;
+
+            context.beginPath();
+
+            context.arc(
+                centerX,
+                centerY,
+                glowRadius,
+                0,
+                Math.PI * 2
+            );
+
+            context.fill();
+
+            /*
+             * Tiny actual core.
+             *
+             * Deliberately NOT a giant circle.
+             */
+
+            context.fillStyle =
+                `rgba(245, 241, 255, ${0.72 * coreAlpha})`;
+
+            context.beginPath();
+
+            context.arc(
+                centerX,
+                centerY,
+                2.2 +
+                    gyroProgress * 1.8,
+                0,
+                Math.PI * 2
+            );
+
+            context.fill();
+
+            context.restore();
+        }
+
+        /*
+         * -------------------------------------------------
+         * SUBTLE SCAN / DATA PULSE
+         * -------------------------------------------------
+         */
+
+        if (
+            morphProgress > 0.62
+        ) {
+            const pulse =
+                (
+                    Math.sin(
+                        elapsed *
+                        0.003
+                    ) + 1
+                ) / 2;
+
+            const radius =
+                (
+                    Math.min(
+                        width,
+                        height
+                    ) *
+                    (
+                        0.24 +
+                        pulse * 0.18
+                    )
+                );
+
+            context.save();
+
+            context.strokeStyle =
+                `rgba(169, 140, 255, ${0.025 + pulse * 0.035})`;
+
+            context.lineWidth = 1;
+
+            context.beginPath();
+
+            context.arc(
+                width / 2,
+                height / 2,
+                radius,
+                0,
+                Math.PI * 2
+            );
+
+            context.stroke();
+
+            context.restore();
+        }
+    }
+
+    /*
+     * -----------------------------------------------------
+     * START ANIMATION
+     * -----------------------------------------------------
+     */
+
+    const reducedMotion =
+        window.matchMedia?.(
+            "(prefers-reduced-motion: reduce)"
+        ).matches === true;
+
+    const animationDuration =
+        16000;
+
+    const startTime =
+        performance.now();
+
+    function animate(
+        timestamp
+    ) {
+        const elapsed =
+            Math.min(
+                timestamp -
+                    startTime,
+                animationDuration
+            );
+
+        drawFrame(
+            elapsed
+        );
+
+        if (
+            elapsed <
+            animationDuration &&
+            demoRunning
+        ) {
+            memoryAnimationFrame =
+                requestAnimationFrame(
+                    animate
+                );
+        } else {
+            memoryAnimationFrame =
+                null;
+
+            if (
+                memoryResizeObserver
+            ) {
+                memoryResizeObserver.disconnect();
+
+                memoryResizeObserver =
+                    null;
+            }
+        }
+    }
+
+    if (reducedMotion) {
+        drawFrame(
+            animationDuration
+        );
+
+        if (
+            memoryResizeObserver
+        ) {
+            memoryResizeObserver.disconnect();
+
+            memoryResizeObserver =
+                null;
+        }
+
         return;
     }
 
-    const visual =
-        document.createElement(
-            "div"
+    memoryAnimationFrame =
+        requestAnimationFrame(
+            animate
         );
-
-    visual.className =
-        "demo-memory-visual";
-
-    visual.innerHTML = `
-        <div class="demo-memory-gyro demo-memory-gyro-a"></div>
-        <div class="demo-memory-gyro demo-memory-gyro-b"></div>
-        <div class="demo-memory-gyro demo-memory-gyro-c"></div>
-
-        <div class="demo-memory-connections">
-            ${connections.join("")}
-        </div>
-
-        <div class="demo-memory-particles">
-            ${particles.join("")}
-        </div>
-
-        <div class="demo-memory-core">
-            <div class="demo-memory-ring"></div>
-
-            <div class="demo-memory-number">
-                ${memories}
-            </div>
-
-            <div class="demo-memory-label">
-                MEMORIES
-            </div>
-        </div>
-
-        <div class="demo-memory-growth">
-            MEMORY GROWTH
-        </div>
-    `;
-
-    narration.appendChild(
-        visual
-    );
 }
 
 function renderDemoDeployment(

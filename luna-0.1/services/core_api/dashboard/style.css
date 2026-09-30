@@ -2758,45 +2758,114 @@ RESPONSIVE
 }
 
 /* =========================================================
-   MEMORY GROWTH VISUALIZATION
+   MEMORY GROWTH / MEMORY UNIVERSE
    ========================================================= */
 
 .demo-memory-visual {
     position: relative;
 
-    width: min(340px, 34vw);
-    height: min(340px, 34vw);
+    width: min(500px, 48vw);
+    height: min(500px, 48vw);
 
-    margin: 24px auto 4px;
+    margin: 0 auto;
 
     display: grid;
     place-items: center;
+
+    pointer-events: none;
 }
 
-.demo-memory-particles,
-.demo-memory-connections {
-    position: absolute;
-    inset: 0;
+.demo-memory-canvas {
+    display: block;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: visible;
 }
 
-.demo-memory-particle {
+.demo-memory-readout {
     position: absolute;
 
-    width: 5px;
-    height: 5px;
+    top: 11%;
+    left: 50%;
 
-    border-radius: 50%;
+    transform:
+        translateX(-50%);
 
-    background:
+    text-align: center;
+
+    pointer-events: none;
+
+    white-space: nowrap;
+}
+
+.demo-memory-readout-label {
+    color:
         rgba(
             169,
             140,
             255,
-            var(--memory-opacity)
+            0.30
         );
 
-    box-shadow:
-        0 0 10px
+    font-size: 6px;
+    font-weight: 700;
+
+    letter-spacing: 0.22em;
+}
+
+.demo-memory-readout-phase {
+    margin-top: 6px;
+
+    color:
+        rgba(
+            255,
+            255,
+            255,
+            0.48
+        );
+
+    font-size: 8px;
+    font-weight: 600;
+
+    letter-spacing: 0.17em;
+
+    transition:
+        color 500ms ease;
+}
+
+.demo-memory-count {
+    position: absolute;
+
+    left: 50%;
+    bottom: 10%;
+
+    transform:
+        translateX(-50%);
+
+    color:
+        rgba(
+            255,
+            255,
+            255,
+            0.68
+        );
+
+    font-size: 8px;
+    font-weight: 500;
+
+    letter-spacing: 0.16em;
+
+    white-space: nowrap;
+
+    pointer-events: none;
+}
+
+.demo-memory-count span {
+    margin-left: 5px;
+
+    color:
         rgba(
             169,
             140,
@@ -2804,319 +2873,30 @@ RESPONSIVE
             0.42
         );
 
-    transform:
-        translate(-50%, -50%)
-        scale(0.7);
-
-    animation:
-        demoMemoryParticlePulse
-        3.2s
-        ease-in-out
-        infinite;
-
-    animation-delay:
-        var(--memory-delay);
-}
-
-.demo-memory-connection {
-    position: absolute;
-
-    height: 1px;
-
-    transform-origin: left center;
-
-    background:
-        linear-gradient(
-            90deg,
-            transparent,
-            rgba(
-                169,
-                140,
-                255,
-                0.16
-            ),
-            transparent
-        );
-
-    opacity: 0.65;
-}
-
-.demo-memory-gyro {
-    position: absolute;
-
-    inset: 10%;
-
-    border:
-        1px solid
-        rgba(
-            169,
-            140,
-            255,
-            0.10
-        );
-
-    border-radius: 50%;
-
-    pointer-events: none;
-}
-
-.demo-memory-gyro-a {
-    transform:
-        rotateX(68deg)
-        rotateZ(12deg);
-
-    animation:
-        demoMemoryGyroA
-        13s
-        linear
-        infinite;
-}
-
-.demo-memory-gyro-b {
-    inset: 17%;
-
-    transform:
-        rotateY(68deg)
-        rotateZ(-20deg);
-
-    border-color:
-        rgba(
-            169,
-            140,
-            255,
-            0.07
-        );
-
-    animation:
-        demoMemoryGyroB
-        17s
-        linear
-        infinite reverse;
-}
-
-.demo-memory-gyro-c {
-    inset: 24%;
-
-    transform:
-        rotateX(72deg)
-        rotateY(18deg);
-
-    border-color:
-        rgba(
-            169,
-            140,
-            255,
-            0.06
-        );
-
-    animation:
-        demoMemoryGyroC
-        11s
-        linear
-        infinite;
-}
-
-.demo-memory-core {
-    position: relative;
-    z-index: 4;
-
-    width: 104px;
-    height: 104px;
-
-    display: flex;
-    flex-direction: column;
-
-    align-items: center;
-    justify-content: center;
-
-    border:
-        1px solid
-        rgba(
-            169,
-            140,
-            255,
-            0.23
-        );
-
-    border-radius: 50%;
-
-    background:
-        radial-gradient(
-            circle,
-            rgba(
-                169,
-                140,
-                255,
-                0.14
-            ),
-            rgba(
-                10,
-                12,
-                16,
-                0.84
-            ) 70%
-        );
-
-    box-shadow:
-        0 0 40px
-        rgba(
-            169,
-            140,
-            255,
-            0.09
-        );
-
-    animation:
-        demoMemoryCorePulse
-        3.8s
-        ease-in-out
-        infinite;
-}
-
-.demo-memory-ring {
-    position: absolute;
-
-    inset: -8px;
-
-    border:
-        1px solid
-        rgba(
-            169,
-            140,
-            255,
-            0.12
-        );
-
-    border-radius: 50%;
-
-    animation:
-        demoSpin
-        12s
-        linear
-        infinite;
-}
-
-.demo-memory-number {
-    font-size: 27px;
-    font-weight: 500;
-
-    color:
-        rgba(
-            255,
-            255,
-            255,
-            0.92
-        );
-}
-
-.demo-memory-label {
-    margin-top: 4px;
-
-    font-size: 7px;
-    font-weight: 700;
-
-    letter-spacing: 0.16em;
-
-    color:
-        rgba(
-            255,
-            255,
-            255,
-            0.30
-        );
-}
-
-.demo-memory-growth {
-    position: absolute;
-
-    bottom: 0;
-
-    font-size: 7px;
+    font-size: 6px;
     font-weight: 700;
 
     letter-spacing: 0.18em;
-
-    color:
-        rgba(
-            169,
-            140,
-            255,
-            0.38
-        );
 }
 
-@keyframes demoMemoryParticlePulse {
-    0%,
-    100% {
-        opacity: 0.45;
-        transform:
-            translate(-50%, -50%)
-            scale(0.7);
-    }
-
-    50% {
-        opacity: 1;
-        transform:
-            translate(-50%, -50%)
-            scale(1.15);
+@media (max-width: 900px) {
+    .demo-memory-visual {
+        width: min(430px, 56vw);
+        height: min(430px, 56vw);
     }
 }
 
-@keyframes demoMemoryCorePulse {
-    0%,
-    100% {
-        transform: scale(0.97);
+@media (max-width: 600px) {
+    .demo-memory-visual {
+        width: min(360px, 72vw);
+        height: min(360px, 72vw);
     }
 
-    50% {
-        transform: scale(1.03);
-    }
-}
-
-@keyframes demoMemoryGyroA {
-    from {
-        transform:
-            rotateX(68deg)
-            rotateZ(12deg)
-            rotate(0deg);
+    .demo-memory-readout {
+        top: 7%;
     }
 
-    to {
-        transform:
-            rotateX(68deg)
-            rotateZ(12deg)
-            rotate(360deg);
-    }
-}
-
-@keyframes demoMemoryGyroB {
-    from {
-        transform:
-            rotateY(68deg)
-            rotateZ(-20deg)
-            rotate(360deg);
-    }
-
-    to {
-        transform:
-            rotateY(68deg)
-            rotateZ(-20deg)
-            rotate(0deg);
-    }
-}
-
-@keyframes demoMemoryGyroC {
-    from {
-        transform:
-            rotateX(72deg)
-            rotateY(18deg)
-            rotate(0deg);
-    }
-
-    to {
-        transform:
-            rotateX(72deg)
-            rotateY(18deg)
-            rotate(360deg);
+    .demo-memory-count {
+        bottom: 6%;
     }
 }
