@@ -9,9 +9,24 @@ let toastTimeout = null;
 let demoRunning = false;
 let demoStepIndex = 0;
 let demoTimeout = null;
+let demoIntroWritingFrame = null;
+let demoIntroAnimationFrame = null;
+let demoWritingOrb = null;
 
 let memoryAnimationFrame = null;
 let memoryResizeObserver = null;
+
+function stopDemoIntroWriting() {
+    if (
+        demoIntroWritingFrame !== null
+    ) {
+        cancelAnimationFrame(
+            demoIntroWritingFrame
+        );
+
+        demoIntroWritingFrame = null;
+    }
+}
 
 function stopMemoryAnimation() {
     if (memoryAnimationFrame !== null) {
@@ -1060,14 +1075,14 @@ function renderPresentation(
    ========================================================= */
 
 const DEMO_STEPS = [
-    { id: "intro", duration: 3200 },
+    { id: "intro", duration: 9000 },
     { id: "runtime", duration: 5200 },
     { id: "services", duration: 5600 },
     { id: "intelligence", duration: 5600 },
     { id: "memory", duration: 16000 },
     { id: "deployment", duration: 5200 },
     { id: "capabilities", duration: 6200 },
-    { id: "finale", duration: 3600 },
+    { id: "finale", duration: 4800 },
 ];
 
 function setDemoState(state, running = false) {
@@ -1133,6 +1148,7 @@ function createDemoShell() {
     }
 
     stopMemoryAnimation();
+    stopDemoIntroWriting();
 
     clearPresentation();
 
@@ -1153,6 +1169,7 @@ function createDemoShell() {
 
 function destroyDemoShell() {
     stopMemoryAnimation();
+    stopDemoIntroWriting();
 
     const presentation =
         byId("canvas-presentation");
@@ -1300,36 +1317,153 @@ function renderDemoIntro() {
         "READY"
     );
 
-    const finale =
+    const writing =
         createElement(
             "div",
-            "demo-finale"
+            "demo-writing-intro"
         );
 
-    const logo =
-        createElement(
-            "div",
-            "demo-finale-logo",
-            "L.U.N.A."
+    const svg =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "svg"
         );
 
-    const status =
-        createElement(
-            "div",
-            "demo-finale-status",
-            "SYSTEM DEMONSTRATION"
-        );
-
-    finale.appendChild(
-        logo
+    svg.setAttribute(
+        "viewBox",
+        "0 0 620 150"
     );
 
-    finale.appendChild(
-        status
+    svg.setAttribute(
+        "aria-hidden",
+        "true"
     );
+
+    svg.classList.add(
+        "demo-writing-svg"
+    );
+
+    const pathData = [
+        // L
+        `
+        M 151 43
+        C 149 58 150 82 151 102
+        C 166 104 185 104 203 102
+        `,
+
+        // .
+        `
+        M 215 101
+        C 215 99 218 99 218 101
+        C 218 103 215 103 215 101
+        `,
+
+        // U
+        `
+        M 231 43
+        C 231 58 230 79 233 91
+        C 236 103 245 108 255 103
+        C 266 98 271 88 271 75
+        L 272 43
+        `,
+
+        // .
+        `
+        M 284 101
+        C 284 99 287 99 287 101
+        C 287 103 284 103 284 101
+        `,
+
+        // N
+        `
+        M 300 102
+        C 301 83 301 61 301 43
+        C 315 62 330 82 345 102
+        C 346 82 346 61 346 43
+        `,
+
+        // .
+        `
+        M 358 101
+        C 358 99 361 99 361 101
+        C 361 103 358 103 358 101
+        `,
+
+        // A
+        `
+        M 380 102
+        C 391 80 401 58 412 43
+        C 423 61 434 82 445 102
+        M 393 80
+        C 405 79 417 79 430 80
+        `,
+    ];
+
+    const paths = [];
+
+    pathData.forEach(
+        (data, index) => {
+            const path =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "path"
+                );
+
+            path.setAttribute(
+                "d",
+                data.replace(/\s+/g, " ").trim()
+            );
+
+            path.classList.add(
+                "demo-writing-path"
+            );
+
+            if (
+                index === 1 ||
+                index === 3 ||
+                index === 5
+            ) {
+                path.classList.add(
+                    "demo-writing-dot"
+                );
+            }
+
+            svg.appendChild(path);
+            paths.push(path);
+        }
+    );
+
+    writing.appendChild(svg);
+
+    /*
+       Move the REAL idle orb into the writing scene.
+       We keep a reference so STOP can always restore it.
+    */
+
+    const orb =
+        document.querySelector(
+            "#canvas-idle .idle-orb"
+        );
+
+    if (orb) {
+        demoWritingOrb = orb;
+
+        writing.appendChild(
+            orb
+        );
+
+        orb.classList.add(
+            "demo-writing-orb"
+        );
+
+        orb.style.left = "50%";
+        orb.style.top = "50%";
+        orb.style.transform =
+            "translate(-50%, -50%) scale(1)";
+    }
 
     shell.appendChild(
-        finale
+        writing
     );
 
     demoNarration(
@@ -1337,6 +1471,321 @@ function renderDemoIntro() {
         "L.U.N.A.",
         "You asked what I'm for. Let me show you."
     );
+
+    /*
+       Wait one frame so the SVG has its final
+       rendered dimensions before we calculate
+       the orb's starting position.
+    */
+
+    requestAnimationFrame(() => {
+        if (!demoRunning) {
+            return;
+        }
+
+        if (!demoWritingOrb) {
+            return;
+        }
+
+        const firstPath =
+            paths[0];
+
+        if (!firstPath) {
+            return;
+        }
+
+        const writingRect =
+            writing.getBoundingClientRect();
+
+        const svgRect =
+            svg.getBoundingClientRect();
+
+        const svgToWriting = (
+            point
+        ) => {
+            return {
+                x:
+                    svgRect.left -
+                    writingRect.left +
+                    (
+                        point.x /
+                        620
+                    ) *
+                    svgRect.width,
+
+                y:
+                    svgRect.top -
+                    writingRect.top +
+                    (
+                        point.y /
+                        150
+                    ) *
+                    svgRect.height,
+            };
+        };
+
+        const start =
+            firstPath.getPointAtLength(0);
+
+        const startPosition =
+            svgToWriting(start);
+
+        /*
+           First movement:
+           center → beginning of L.
+           The orb gets slightly larger
+           as it reaches the writing position.
+        */
+
+        demoWritingOrb.style.left =
+            `${startPosition.x}px`;
+
+        demoWritingOrb.style.top =
+            `${startPosition.y}px`;
+
+        demoWritingOrb.style.transform =
+            "translate(-50%, -50%) scale(1.28)";
+
+        window.setTimeout(() => {
+            if (!demoRunning) {
+                return;
+            }
+
+            animateDemoWriting(
+                paths,
+                svg,
+                writing
+            );
+        }, 1050);
+    });
+}
+
+function animateDemoWriting(
+    paths,
+    svg,
+    writing
+) {
+    if (!demoWritingOrb) {
+        return;
+    }
+
+    const writingRect =
+        writing.getBoundingClientRect();
+
+    const svgRect =
+        svg.getBoundingClientRect();
+
+    const svgToWriting = (
+        point
+    ) => {
+        return {
+            x:
+                svgRect.left -
+                writingRect.left +
+                (
+                    point.x /
+                    620
+                ) *
+                svgRect.width,
+
+            y:
+                svgRect.top -
+                writingRect.top +
+                (
+                    point.y /
+                    150
+                ) *
+                svgRect.height,
+        };
+    };
+
+    /*
+       Make the handwriting itself appear
+       progressively as the orb moves.
+    */
+
+    paths.forEach(
+        path => {
+            const length =
+                path.getTotalLength();
+
+            path.style.strokeDasharray =
+                `${length}`;
+
+            path.style.strokeDashoffset =
+                `${length}`;
+        }
+    );
+
+    let pathIndex = 0;
+    let distance = 0;
+    let lastTimestamp = null;
+    let pauseUntil = 0;
+
+    const pixelsPerSecond = 92;
+
+    const writeNextPath = (
+        timestamp
+    ) => {
+        if (!demoRunning) {
+            demoIntroAnimationFrame = null;
+            return;
+        }
+
+        const path =
+            paths[pathIndex];
+
+        if (!path) {
+            demoIntroAnimationFrame = null;
+
+            demoWritingOrb.style.transform =
+                "translate(-50%, -50%) scale(1.12)";
+
+            return;
+        }
+
+        if (pauseUntil > timestamp) {
+            demoIntroAnimationFrame =
+                requestAnimationFrame(
+                    writeNextPath
+                );
+
+            return;
+        }
+
+        if (lastTimestamp === null) {
+            lastTimestamp = timestamp;
+        }
+
+        const delta =
+            Math.min(
+                40,
+                timestamp -
+                lastTimestamp
+            );
+
+        lastTimestamp = timestamp;
+
+        /*
+           Tiny speed variation keeps it from
+           looking completely robotic, while
+           the actual position still comes
+           directly from the path.
+        */
+
+        const speed =
+            pixelsPerSecond *
+            (
+                0.90 +
+                Math.sin(
+                    timestamp * 0.0037
+                ) * 0.08
+            );
+
+        distance +=
+            speed *
+            (delta / 1000);
+
+        const length =
+            path.getTotalLength();
+
+        const progress =
+            Math.min(
+                1,
+                distance / length
+            );
+
+        const point =
+            path.getPointAtLength(
+                Math.min(
+                    distance,
+                    length
+                )
+            );
+
+        const position =
+            svgToWriting(point);
+
+        demoWritingOrb.style.left =
+            `${position.x}px`;
+
+        demoWritingOrb.style.top =
+            `${position.y}px`;
+
+        demoWritingOrb.style.transform =
+            "translate(-50%, -50%) scale(1.22)";
+
+        path.style.strokeDashoffset =
+            `${length * (1 - progress)}`;
+
+        if (progress >= 1) {
+            pathIndex += 1;
+            distance = 0;
+            lastTimestamp = null;
+
+            /*
+               Small human-looking pause before
+               lifting the pen to the next stroke.
+            */
+
+            pauseUntil =
+                timestamp +
+                (
+                    pathIndex === paths.length
+                        ? 260
+                        : 110
+                );
+        }
+
+        demoIntroAnimationFrame =
+            requestAnimationFrame(
+                writeNextPath
+            );
+    };
+
+    demoIntroAnimationFrame =
+        requestAnimationFrame(
+            writeNextPath
+        );
+}
+
+function restoreIdleOrb() {
+    if (demoIntroAnimationFrame !== null) {
+        cancelAnimationFrame(
+            demoIntroAnimationFrame
+        );
+
+        demoIntroAnimationFrame = null;
+    }
+
+    const orb =
+        demoWritingOrb ||
+        document.querySelector(
+            ".demo-writing-orb"
+        );
+
+    const idle =
+        byId("canvas-idle");
+
+    if (!orb || !idle) {
+        demoWritingOrb = null;
+        return;
+    }
+
+    orb.classList.remove(
+        "demo-writing-orb"
+    );
+
+    orb.removeAttribute(
+        "style"
+    );
+
+    idle.insertBefore(
+        orb,
+        idle.firstChild
+    );
+
+    demoWritingOrb = null;
 }
 
 function renderDemoRuntime(
@@ -3339,7 +3788,9 @@ function renderDemoFinale() {
     const shell =
         createDemoShell();
 
-    if (!shell) return;
+    if (!shell) {
+        return;
+    }
 
     demoCorners(
         shell,
@@ -3380,6 +3831,150 @@ function renderDemoFinale() {
         "DEMONSTRATION COMPLETE",
         "That's L.U.N.A."
     );
+
+    /*
+     * The finale holds for a moment, then the entire
+     * presentation quietly disappears.
+     *
+     * The normal idle sphere is revealed underneath.
+     */
+
+    window.setTimeout(
+        () => {
+            if (!demoRunning) {
+                return;
+            }
+
+            const presentation =
+                byId(
+                    "canvas-presentation"
+                );
+
+            if (!presentation) {
+                return;
+            }
+
+            presentation.classList.add(
+                "demo-finale-exit"
+            );
+
+            window.setTimeout(
+                () => {
+                    if (!demoRunning) {
+                        return;
+                    }
+
+                    restoreIdleOrb();
+
+                    showStateView(
+                        "idle"
+                    );
+                },
+                850
+            );
+        },
+        2500
+    );
+}
+
+function transitionDemoScene(
+    renderScene
+) {
+    return new Promise(
+        (resolve) => {
+            const container =
+                byId(
+                    "canvas-presentation"
+                );
+
+            if (!container) {
+                renderScene();
+                resolve();
+                return;
+            }
+
+            container.classList.remove(
+                "demo-scene-enter",
+                "demo-scene-exit"
+            );
+
+            /*
+             * If this is the first scene, don't waste
+             * time doing an exit animation.
+             */
+
+            const hasContent =
+                container.children.length > 0;
+
+            if (!hasContent) {
+                renderScene();
+
+                requestAnimationFrame(
+                    () => {
+                        container.classList.add(
+                            "demo-scene-enter"
+                        );
+
+                        window.setTimeout(
+                            () => {
+                                container.classList.remove(
+                                    "demo-scene-enter"
+                                );
+
+                                resolve();
+                            },
+                            520
+                        );
+                    }
+                );
+
+                return;
+            }
+
+            /*
+             * Existing scene leaves first.
+             */
+
+            container.classList.add(
+                "demo-scene-exit"
+            );
+
+            window.setTimeout(
+                () => {
+                    if (!demoRunning) {
+                        resolve();
+                        return;
+                    }
+
+                    container.classList.remove(
+                        "demo-scene-exit"
+                    );
+
+                    renderScene();
+
+                    requestAnimationFrame(
+                        () => {
+                            container.classList.add(
+                                "demo-scene-enter"
+                            );
+
+                            window.setTimeout(
+                                () => {
+                                    container.classList.remove(
+                                        "demo-scene-enter"
+                                    );
+
+                                    resolve();
+                                },
+                                520
+                            );
+                        }
+                    );
+                },
+                260
+            );
+        }
+    );
 }
 
 async function runDemoStep() {
@@ -3400,7 +3995,11 @@ async function runDemoStep() {
     try {
         switch (step.id) {
             case "intro":
-                renderDemoIntro();
+                await transitionDemoScene(
+                    () => {
+                        renderDemoIntro();
+                    }
+                );
                 break;
 
             case "runtime": {
@@ -3408,8 +4007,12 @@ async function runDemoStep() {
                     await getSystem();
 
                 if (demoRunning) {
-                    renderDemoRuntime(
-                        system
+                    await transitionDemoScene(
+                        () => {
+                            renderDemoRuntime(
+                                system
+                            );
+                        }
                     );
                 }
 
@@ -3421,8 +4024,12 @@ async function runDemoStep() {
                     await getServices();
 
                 if (demoRunning) {
-                    renderDemoServices(
-                        services
+                    await transitionDemoScene(
+                        () => {
+                            renderDemoServices(
+                                services
+                            );
+                        }
                     );
                 }
 
@@ -3434,8 +4041,12 @@ async function runDemoStep() {
                     await getStatus();
 
                 if (demoRunning) {
-                    renderDemoIntelligence(
-                        status
+                    await transitionDemoScene(
+                        () => {
+                            renderDemoIntelligence(
+                                status
+                            );
+                        }
                     );
                 }
 
@@ -3447,8 +4058,12 @@ async function runDemoStep() {
                     await getDataStatus();
 
                 if (demoRunning) {
-                    renderDemoMemory(
-                        data
+                    await transitionDemoScene(
+                        () => {
+                            renderDemoMemory(
+                                data
+                            );
+                        }
                     );
                 }
 
@@ -3460,8 +4075,12 @@ async function runDemoStep() {
                     await getUpdateStatus();
 
                 if (demoRunning) {
-                    renderDemoDeployment(
-                        update
+                    await transitionDemoScene(
+                        () => {
+                            renderDemoDeployment(
+                                update
+                            );
+                        }
                     );
                 }
 
@@ -3469,11 +4088,19 @@ async function runDemoStep() {
             }
 
             case "capabilities":
-                renderDemoCapabilities();
+                await transitionDemoScene(
+                    () => {
+                        renderDemoCapabilities();
+                    }
+                );
                 break;
 
             case "finale":
-                renderDemoFinale();
+                await transitionDemoScene(
+                    () => {
+                        renderDemoFinale();
+                    }
+                );
                 break;
 
             default:
@@ -3540,6 +4167,7 @@ function finishDemo() {
         false
     );
 
+    restoreIdleOrb();
     destroyDemoShell();
 
     if (latestTelemetry?.dashboard) {
@@ -3572,6 +4200,7 @@ function stopDemo() {
         false
     );
 
+    restoreIdleOrb();
     destroyDemoShell();
 
     if (latestTelemetry?.dashboard) {

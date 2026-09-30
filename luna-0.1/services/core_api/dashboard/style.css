@@ -2900,3 +2900,337 @@ RESPONSIVE
         bottom: 6%;
     }
 }
+
+/* =========================================================
+   DEMO INTRO / L.U.N.A. HANDWRITING
+   ========================================================= */
+
+.demo-writing-intro {
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: min(620px, 62vw);
+    height: 150px;
+
+    transform:
+        translate(-50%, -50%);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    pointer-events: none;
+}
+
+
+.demo-writing-svg {
+    position: absolute;
+
+    inset: 0;
+
+    width: 100%;
+    height: 100%;
+
+    overflow: visible;
+}
+
+.demo-writing-path {
+    fill: none;
+
+    stroke:
+        rgba(255, 255, 255, 0.92);
+
+    stroke-width: 3;
+
+    stroke-linecap: round;
+    stroke-linejoin: round;
+
+    filter:
+        drop-shadow(
+            0 0 7px
+            rgba(255, 255, 255, 0.08)
+        );
+}
+
+.demo-writing-dot {
+    stroke-width: 4;
+}
+
+.demo-writing-subtitle {
+    position: absolute;
+
+    left: 50%;
+    bottom: -4px;
+
+    transform:
+        translate(
+            -50%,
+            6px
+        );
+
+    white-space: nowrap;
+
+    color:
+        rgba(
+            169,
+            140,
+            255,
+            0.42
+        );
+
+    font-size: 7px;
+    font-weight: 700;
+
+    letter-spacing: 0.28em;
+
+    opacity: 0;
+
+    transition:
+        opacity 700ms ease,
+        transform 700ms ease;
+}
+
+.demo-writing-subtitle.visible {
+    opacity: 1;
+
+    transform:
+        translate(
+            -50%,
+            0
+        );
+}
+
+
+/* =========================================================
+   THE ACTUAL IDLE ORB BECOMES THE PEN
+   ========================================================= */
+
+.demo-writing-orb {
+    position: absolute;
+
+    z-index: 20;
+
+    width: 24px;
+    height: 24px;
+
+    margin: 0;
+
+    transition:
+        left 1050ms
+            cubic-bezier(.22,.75,.25,1),
+        top 1050ms
+            cubic-bezier(.22,.75,.25,1),
+        transform 420ms
+            cubic-bezier(.22,1,.36,1);
+
+    animation: none !important;
+
+    pointer-events: none;
+}
+
+
+/*
+ * Slight writing glow.
+ */
+
+.demo-writing-orb::after {
+    content: "";
+
+    position: absolute;
+
+    inset: -8px;
+
+    border-radius: 50%;
+
+    background:
+        radial-gradient(
+            circle,
+            rgba(169, 140, 255, 0.18),
+            transparent 68%
+        );
+
+    pointer-events: none;
+}
+
+
+/* Respect reduced motion. */
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+    .demo-writing-orb {
+        transition: none;
+    }
+
+    .demo-writing-intro {
+        transform:
+            translate(
+                -50%,
+                -50%
+            );
+    }
+}
+
+/* =========================================================
+   DEMO SCENE TRANSITIONS
+   ========================================================= */
+
+#canvas-presentation.demo-scene-exit {
+    opacity: 0;
+
+    transform:
+        scale(0.985)
+        translateY(5px);
+
+    filter:
+        blur(2px);
+
+    transition:
+        opacity 260ms ease,
+        transform 260ms ease,
+        filter 260ms ease;
+}
+
+#canvas-presentation.demo-scene-enter {
+    animation:
+        demoSceneEnter
+        520ms
+        cubic-bezier(
+            0.22,
+            0.75,
+            0.25,
+            1
+        );
+}
+
+@keyframes demoSceneEnter {
+    0% {
+        opacity: 0;
+
+        transform:
+            scale(1.015)
+            translateY(-7px);
+
+        filter:
+            blur(3px);
+    }
+
+    55% {
+        opacity: 0.82;
+
+        transform:
+            scale(1.003)
+            translateY(1px);
+
+        filter:
+            blur(0.7px);
+    }
+
+    100% {
+        opacity: 1;
+
+        transform:
+            scale(1)
+            translateY(0);
+
+        filter:
+            blur(0);
+    }
+}
+
+@media (
+    prefers-reduced-motion: reduce
+) {
+    #canvas-presentation.demo-scene-exit {
+        opacity: 0;
+        transform: none;
+        filter: none;
+        transition:
+            opacity 120ms ease;
+    }
+
+    #canvas-presentation.demo-scene-enter {
+        animation:
+            demoSceneReducedEnter
+            160ms
+            ease-out;
+    }
+
+    @keyframes demoSceneReducedEnter {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+}
+
+/* =========================================================
+   DEMO FINALE EXIT
+   ========================================================= */
+
+#canvas-presentation.demo-finale-exit {
+    opacity: 0;
+
+    transform:
+        scale(0.985);
+
+    filter:
+        blur(2px);
+
+    transition:
+        opacity 850ms
+            cubic-bezier(
+                0.22,
+                0.75,
+                0.25,
+                1
+            ),
+        transform 850ms
+            cubic-bezier(
+                0.22,
+                0.75,
+                0.25,
+                1
+            ),
+        filter 850ms ease;
+}
+
+#canvas-idle:not(.hidden) {
+    animation:
+        demoIdleReturn
+        900ms
+        cubic-bezier(
+            0.22,
+            1,
+            0.36,
+            1
+        )
+        both;
+}
+
+@keyframes demoIdleReturn {
+    from {
+        opacity: 0;
+
+        transform:
+            scale(0.94);
+
+        filter:
+            blur(3px);
+    }
+
+    to {
+        opacity: 1;
+
+        transform:
+            scale(1);
+
+        filter:
+            blur(0);
+    }
+}
