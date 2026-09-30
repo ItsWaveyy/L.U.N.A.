@@ -1759,131 +1759,226 @@ function renderDemoIntelligence(
 function renderDemoMemory(
     data
 ) {
-    const shell =
-        createDemoShell();
+    const sessions =
+        Number(data?.sessions) || 0;
 
-    if (!shell) return;
+    const messages =
+        Number(data?.messages) || 0;
 
-    demoHeading(
-        shell,
-        "MEMORY & ARCHIVE",
-        "Context doesn't disappear.",
-        "Persistent conversation and reminder data"
-    );
+    const memories =
+        Number(data?.memories) || 0;
 
-    demoCorners(
-        shell,
-        "MEMORY // ARCHIVE",
-        "DATABASE ONLINE",
-        `${data?.sessions ?? 0} SESSIONS`,
-        `${data?.messages ?? 0} MESSAGES`
-    );
+    const reminders =
+        Number(data?.reminders) || 0;
 
-    const field =
-        createElement(
-            "div",
-            "demo-memory-field"
-        );
-
-    const center =
-        createElement(
-            "div",
-            "demo-memory-center"
-        );
-
-    center.appendChild(
-        createElement(
-            "div",
-            "demo-memory-count",
-            String(
-                data?.sessions ?? 0
-            )
-        )
-    );
-
-    center.appendChild(
-        createElement(
-            "div",
-            "demo-memory-label",
-            "SESSIONS"
-        )
-    );
-
-    field.appendChild(
-        center
-    );
-
-    const nodeCount =
+    const visualNodes =
         Math.min(
-            48,
+            42,
             Math.max(
                 12,
-                Number(
-                    data?.sessions ?? 0
+                Math.round(
+                    12 +
+                    Math.sqrt(
+                        Math.max(
+                            sessions,
+                            1
+                        )
+                    ) * 4
                 )
             )
         );
 
+    const particles = [];
+
     for (
         let index = 0;
-        index < nodeCount;
+        index < visualNodes;
         index += 1
     ) {
-        const node =
-            createElement(
-                "div",
-                "demo-memory-node"
-            );
-
         const angle =
-            (index / nodeCount) *
-            Math.PI *
-            2;
+            (Math.PI * 2 * index) /
+            visualNodes;
 
         const radius =
-            32 +
-            (index % 4) * 5;
+            30 +
+            ((index * 17) % 40);
 
         const x =
             50 +
-            Math.cos(angle) *
-            radius;
+            Math.cos(angle) * radius;
 
         const y =
             50 +
             Math.sin(angle) *
-            radius *
-            0.62;
+                radius *
+                0.62;
 
-        node.style.left =
-            `${x}%`;
-
-        node.style.top =
-            `${y}%`;
-
-        node.style.animationDelay =
-            `${index * 70}ms`;
-
-        field.appendChild(
-            node
-        );
+        particles.push(`
+            <i
+                class="demo-memory-particle"
+                style="
+                    left:${x.toFixed(2)}%;
+                    top:${y.toFixed(2)}%;
+                    --memory-delay:${(
+                        (index % 8) * 0.18
+                    ).toFixed(2)}s;
+                    --memory-opacity:${(
+                        0.32 +
+                        ((index % 5) * 0.10)
+                    ).toFixed(2)};
+                "
+            ></i>
+        `);
     }
 
-    shell.appendChild(
-        field
-    );
+    const connections = [];
+
+    for (
+        let index = 0;
+        index < visualNodes - 1;
+        index += 2
+    ) {
+        const angleA =
+            (Math.PI * 2 * index) /
+            visualNodes;
+
+        const angleB =
+            (Math.PI * 2 * (index + 1)) /
+            visualNodes;
+
+        const radiusA =
+            30 +
+            ((index * 17) % 40);
+
+        const radiusB =
+            30 +
+            (((index + 1) * 17) % 40);
+
+        const x1 =
+            50 +
+            Math.cos(angleA) * radiusA;
+
+        const y1 =
+            50 +
+            Math.sin(angleA) *
+                radiusA *
+                0.62;
+
+        const x2 =
+            50 +
+            Math.cos(angleB) * radiusB;
+
+        const y2 =
+            50 +
+            Math.sin(angleB) *
+                radiusB *
+                0.62;
+
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+
+        const length =
+            Math.sqrt(
+                dx * dx +
+                dy * dy
+            );
+
+        const rotation =
+            Math.atan2(
+                dy,
+                dx
+            ) *
+            (180 / Math.PI);
+
+        connections.push(`
+            <i
+                class="demo-memory-connection"
+                style="
+                    left:${x1.toFixed(2)}%;
+                    top:${y1.toFixed(2)}%;
+                    width:${length.toFixed(2)}%;
+                    transform:
+                        rotate(${rotation.toFixed(2)}deg);
+                "
+            ></i>
+        `);
+    }
 
     demoNarration(
-        shell,
-        "PERSISTENT CONTEXT",
+        "MEMORY & ARCHIVE",
+        `${sessions} sessions stored.`,
         [
-            `${data?.memories ?? 0} memories`,
-            `${data?.sessions ?? 0} sessions`,
-            `${data?.messages ?? 0} messages`,
-            `${data?.reminders ?? 0} reminders`,
-        ].join(
-            "  ·  "
-        )
+            `${memories} memories`,
+            `${messages} messages`,
+            `${reminders} reminders`,
+        ].join("  ·  ")
+    );
+
+    const container =
+        byId(
+            "canvas-presentation"
+        );
+
+    if (!container) {
+        return;
+    }
+
+    /*
+     * The existing narration remains the actual
+     * demo information layer. We augment it with
+     * the memory visualization instead of replacing
+     * the working demo architecture.
+     */
+
+    const narration =
+        container.querySelector(
+            ".demo-narration"
+        );
+
+    if (!narration) {
+        return;
+    }
+
+    const visual =
+        document.createElement(
+            "div"
+        );
+
+    visual.className =
+        "demo-memory-visual";
+
+    visual.innerHTML = `
+        <div class="demo-memory-gyro demo-memory-gyro-a"></div>
+        <div class="demo-memory-gyro demo-memory-gyro-b"></div>
+        <div class="demo-memory-gyro demo-memory-gyro-c"></div>
+
+        <div class="demo-memory-connections">
+            ${connections.join("")}
+        </div>
+
+        <div class="demo-memory-particles">
+            ${particles.join("")}
+        </div>
+
+        <div class="demo-memory-core">
+            <div class="demo-memory-ring"></div>
+
+            <div class="demo-memory-number">
+                ${memories}
+            </div>
+
+            <div class="demo-memory-label">
+                MEMORIES
+            </div>
+        </div>
+
+        <div class="demo-memory-growth">
+            MEMORY GROWTH
+        </div>
+    `;
+
+    narration.appendChild(
+        visual
     );
 }
 
