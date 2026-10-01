@@ -5260,6 +5260,1434 @@ function showToast(
         );
 }
 
+/* =========================================================
+   L.U.N.A. CINEMATIC STARTUP
+   ========================================================= */
+
+let startupRunning = false;
+let startupFrame = null;
+let startupResizeHandler = null;
+
+const STARTUP_DURATION = 5100;
+
+const startupState = {
+    canvas: null,
+    context: null,
+
+    width: 1,
+    height: 1,
+    dpr: 1,
+
+    startedAt: 0,
+
+    particles: [],
+    stars: [],
+
+    progress: 0,
+};
+
+
+function startupEase(value) {
+    return value * value * (3 - 2 * value);
+}
+
+
+function startupClamp(value, min, max) {
+    return Math.max(
+        min,
+        Math.min(max, value)
+    );
+}
+
+
+function startupResize() {
+    const canvas =
+        startupState.canvas;
+
+    if (!canvas) {
+        return;
+    }
+
+    const rect =
+        canvas.parentElement.getBoundingClientRect();
+
+    startupState.width =
+        Math.max(
+            1,
+            rect.width
+        );
+
+    startupState.height =
+        Math.max(
+            1,
+            rect.height
+        );
+
+    startupState.dpr =
+        Math.min(
+            2,
+            window.devicePixelRatio || 1
+        );
+
+    canvas.width =
+        Math.floor(
+            startupState.width *
+            startupState.dpr
+        );
+
+    canvas.height =
+        Math.floor(
+            startupState.height *
+            startupState.dpr
+        );
+
+    canvas.style.width =
+        `${startupState.width}px`;
+
+    canvas.style.height =
+        `${startupState.height}px`;
+
+    startupState.context.setTransform(
+        startupState.dpr,
+        0,
+        0,
+        startupState.dpr,
+        0,
+        0
+    );
+}
+
+
+function startupCreateParticles() {
+    const count =
+        Math.floor(
+            startupState.width *
+            startupState.height /
+            12500
+        );
+
+    startupState.particles =
+        Array.from(
+            {
+                length:
+                    startupClamp(
+                        count,
+                        70,
+                        180
+                    ),
+            },
+            () => ({
+                x:
+                    Math.random() *
+                    startupState.width,
+
+                y:
+                    Math.random() *
+                    startupState.height,
+
+                radius:
+                    Math.random() *
+                    1.1 +
+                    .2,
+
+                alpha:
+                    Math.random() *
+                    .45 +
+                    .08,
+
+                drift:
+                    Math.random() *
+                    Math.PI *
+                    2,
+
+                speed:
+                    Math.random() *
+                    .00035 +
+                    .0001,
+            })
+        );
+}
+
+
+function startupCreateStars() {
+    startupState.stars =
+        Array.from(
+            {
+                length: 90,
+            },
+            () => ({
+                x:
+                    Math.random() *
+                    startupState.width,
+
+                y:
+                    Math.random() *
+                    startupState.height,
+
+                radius:
+                    Math.random() *
+                    .7 +
+                    .15,
+
+                alpha:
+                    Math.random() *
+                    .25 +
+                    .05,
+            })
+        );
+}
+
+
+function startupDrawBackground(
+    context,
+    elapsed
+) {
+    const width =
+        startupState.width;
+
+    const height =
+        startupState.height;
+
+    context.fillStyle =
+        "#050608";
+
+    context.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    const gradient =
+        context.createRadialGradient(
+            width / 2,
+            height / 2,
+            0,
+            width / 2,
+            height / 2,
+            Math.max(width, height) * .55
+        );
+
+    gradient.addColorStop(
+        0,
+        "rgba(169,140,255,.055)"
+    );
+
+    gradient.addColorStop(
+        .45,
+        "rgba(169,140,255,.015)"
+    );
+
+    gradient.addColorStop(
+        1,
+        "rgba(0,0,0,0)"
+    );
+
+    context.fillStyle =
+        gradient;
+
+    context.fillRect(
+        0,
+        0,
+        width,
+        height
+    );
+
+    for (
+        const star of startupState.stars
+    ) {
+        const pulse =
+            Math.sin(
+                elapsed * .001 +
+                star.x
+            ) * .25 +
+            .75;
+
+        context.beginPath();
+
+        context.arc(
+            star.x,
+            star.y,
+            star.radius,
+            0,
+            Math.PI * 2
+        );
+
+        context.fillStyle =
+            `rgba(255,255,255,${
+                star.alpha * pulse
+            })`;
+
+        context.fill();
+    }
+}
+
+
+function startupDrawParticles(
+    context,
+    elapsed,
+    energy
+) {
+    for (
+        const particle of startupState.particles
+    ) {
+        const drift =
+            Math.sin(
+                elapsed *
+                particle.speed +
+                particle.drift
+            );
+
+        const x =
+            particle.x +
+            drift * 5;
+
+        const y =
+            particle.y +
+            Math.cos(
+                elapsed *
+                particle.speed +
+                particle.drift
+            ) * 5;
+
+        const glow =
+            particle.alpha *
+            (
+                .45 +
+                energy * .8
+            );
+
+        context.beginPath();
+
+        context.arc(
+            x,
+            y,
+            particle.radius,
+            0,
+            Math.PI * 2
+        );
+
+        context.fillStyle =
+            `rgba(169,140,255,${glow})`;
+
+        context.fill();
+    }
+}
+
+
+function startupDrawEnergy(
+    context,
+    elapsed,
+    energy
+) {
+    const cx =
+        startupState.width / 2;
+
+    const cy =
+        startupState.height / 2;
+
+    const maxRadius =
+        Math.min(
+            startupState.width,
+            startupState.height
+        ) * .34;
+
+    for (
+        let index = 0;
+        index < 3;
+        index++
+    ) {
+        const angle =
+            elapsed * .00035 *
+            (index % 2 === 0 ? 1 : -1) +
+            index * 2.1;
+
+        const length =
+            maxRadius *
+            (
+                .35 +
+                energy * .65
+            );
+
+        context.save();
+
+        context.translate(
+            cx,
+            cy
+        );
+
+        context.rotate(
+            angle
+        );
+
+        const gradient =
+            context.createLinearGradient(
+                0,
+                -length,
+                0,
+                length
+            );
+
+        gradient.addColorStop(
+            0,
+            "rgba(169,140,255,0)"
+        );
+
+        gradient.addColorStop(
+            .5,
+            `rgba(169,140,255,${
+                .08 + energy * .24
+            })`
+        );
+
+        gradient.addColorStop(
+            1,
+            "rgba(169,140,255,0)"
+        );
+
+        context.strokeStyle =
+            gradient;
+
+        context.lineWidth =
+            1;
+
+        context.beginPath();
+
+        context.moveTo(
+            0,
+            -length
+        );
+
+        context.lineTo(
+            0,
+            length
+        );
+
+        context.stroke();
+
+        context.restore();
+    }
+}
+
+
+function startupDrawCore(
+    context,
+    elapsed,
+    energy
+) {
+    const cx =
+        startupState.width / 2;
+
+    const cy =
+        startupState.height / 2;
+
+    const base =
+        Math.min(
+            startupState.width,
+            startupState.height
+        );
+
+    const radius =
+        base *
+        (
+            .055 +
+            energy * .075
+        );
+
+    context.save();
+
+    context.translate(
+        cx,
+        cy
+    );
+
+    for (
+        let index = 0;
+        index < 3;
+        index++
+    ) {
+        const angle =
+            elapsed *
+            .00045 *
+            (index % 2 ? -1 : 1) +
+            index *
+            2.05;
+
+        context.save();
+
+        context.rotate(
+            angle
+        );
+
+        context.scale(
+            1,
+            .34
+        );
+
+        context.beginPath();
+
+        context.arc(
+            0,
+            0,
+            radius *
+                (1.8 + index * .5),
+            0,
+            Math.PI * 2
+        );
+
+        context.strokeStyle =
+            `rgba(169,140,255,${
+                .12 +
+                energy * .20
+            })`;
+
+        context.lineWidth =
+            1;
+
+        context.stroke();
+
+        context.restore();
+    }
+
+    const glow =
+        context.createRadialGradient(
+            0,
+            0,
+            0,
+            0,
+            0,
+            radius * 4
+        );
+
+    glow.addColorStop(
+        0,
+        "rgba(255,255,255,.95)"
+    );
+
+    glow.addColorStop(
+        .12,
+        "rgba(169,140,255,.65)"
+    );
+
+    glow.addColorStop(
+        .45,
+        "rgba(169,140,255,.12)"
+    );
+
+    glow.addColorStop(
+        1,
+        "rgba(169,140,255,0)"
+    );
+
+    context.fillStyle =
+        glow;
+
+    context.beginPath();
+
+    context.arc(
+        0,
+        0,
+        radius * 4,
+        0,
+        Math.PI * 2
+    );
+
+    context.fill();
+
+    context.fillStyle =
+        "rgba(255,255,255,.98)";
+
+    context.beginPath();
+
+    context.arc(
+        0,
+        0,
+        Math.max(
+            2,
+            radius * .12
+        ),
+        0,
+        Math.PI * 2
+    );
+
+    context.fill();
+
+    context.restore();
+}
+
+function startupDrawSignature(
+    context,
+    progress
+) {
+    const width =
+        startupState.width;
+
+    const height =
+        startupState.height;
+
+    /*
+     * L.U.N.A. is drawn as one continuous
+     * stroke sequence. Each entry is an
+     * array of [x, y] points.
+     *
+     * The entire word is centered from
+     * its calculated bounds instead of using
+     * a hard-coded left offset.
+     */
+
+    const strokes = [
+        // L
+        [
+            [0, 0],
+            [0, 54],
+            [38, 54]
+        ],
+
+        // .
+        [
+            [52, 54],
+            [52, 54]
+        ],
+
+        // U
+        [
+            [68, 0],
+            [68, 42],
+            [72, 54],
+            [88, 58],
+            [104, 54],
+            [108, 42],
+            [108, 0]
+        ],
+
+        // .
+        [
+            [122, 54],
+            [122, 54]
+        ],
+
+        // N
+        [
+            [138, 54],
+            [138, 0],
+            [176, 54],
+            [176, 0]
+        ],
+
+        // .
+        [
+            [190, 54],
+            [190, 54]
+        ],
+
+        // A
+        [
+            [206, 54],
+            [225, 0],
+            [244, 54]
+        ],
+
+        // A crossbar
+        [
+            [214, 36],
+            [237, 36]
+        ]
+    ];
+
+
+    /*
+     * Calculate total stroke length.
+     * This lets progress move a single
+     * drawing cursor through the entire
+     * signature instead of revealing
+     * whole letters at once.
+     */
+
+    let totalLength = 0;
+
+    const lengths = [];
+
+    for (const stroke of strokes) {
+        let strokeLength = 0;
+
+        for (
+            let index = 1;
+            index < stroke.length;
+            index++
+        ) {
+            const previous =
+                stroke[index - 1];
+
+            const current =
+                stroke[index];
+
+            const dx =
+                current[0] -
+                previous[0];
+
+            const dy =
+                current[1] -
+                previous[1];
+
+            strokeLength +=
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+        }
+
+        lengths.push(
+            strokeLength
+        );
+
+        totalLength +=
+            strokeLength;
+    }
+
+
+    /*
+     * Determine the actual visual bounds.
+     */
+
+    const minX =
+        Math.min(
+            ...strokes.flat().map(
+                point => point[0]
+            )
+        );
+
+    const maxX =
+        Math.max(
+            ...strokes.flat().map(
+                point => point[0]
+            )
+        );
+
+    const minY =
+        Math.min(
+            ...strokes.flat().map(
+                point => point[1]
+            )
+        );
+
+    const maxY =
+        Math.max(
+            ...strokes.flat().map(
+                point => point[1]
+            )
+        );
+
+
+    const signatureWidth =
+        maxX - minX;
+
+    const signatureHeight =
+        maxY - minY;
+
+
+    /*
+     * Scale the signature relative to
+     * the available canvas.
+     */
+
+    const scale =
+        Math.min(
+            width * 0.52 /
+                signatureWidth,
+
+            height * 0.16 /
+                signatureHeight,
+
+            2.2
+        );
+
+
+    /*
+     * Exact center of the canvas.
+     */
+
+    const centerX =
+        width / 2;
+
+    const centerY =
+        height / 2;
+
+
+    /*
+     * Convert the signature bounds so
+     * the rendered geometry is centered
+     * exactly around the canvas center.
+     */
+
+    const originX =
+        centerX -
+        (
+            signatureWidth *
+            scale
+        ) / 2 -
+        minX * scale;
+
+    const originY =
+        centerY -
+        (
+            signatureHeight *
+            scale
+        ) / 2 -
+        minY * scale;
+
+
+    /*
+     * How much of the total path has
+     * been written.
+     */
+
+    const targetLength =
+        startupClamp(
+            progress,
+            0,
+            1
+        ) *
+        totalLength;
+
+
+    let remaining =
+        targetLength;
+
+
+    context.save();
+
+    context.strokeStyle =
+        "rgba(255,255,255,.95)";
+
+    context.lineWidth =
+        Math.max(
+            1.5,
+            2.3 * scale
+        );
+
+    context.lineCap =
+        "round";
+
+    context.lineJoin =
+        "round";
+
+    context.shadowColor =
+        "rgba(169,140,255,.55)";
+
+    context.shadowBlur =
+        Math.max(
+            7,
+            10 * scale
+        );
+
+
+    /*
+     * Draw the strokes progressively.
+     */
+
+    for (
+        let strokeIndex = 0;
+        strokeIndex < strokes.length;
+        strokeIndex++
+    ) {
+        if (remaining <= 0) {
+            break;
+        }
+
+        const stroke =
+            strokes[strokeIndex];
+
+        const strokeLength =
+            lengths[strokeIndex];
+
+
+        /*
+         * Dot strokes have zero length.
+         * Once the writing cursor reaches
+         * them, draw the dot.
+         */
+
+        if (strokeLength === 0) {
+            if (
+                remaining >= 0
+            ) {
+                const point =
+                    stroke[0];
+
+                context.beginPath();
+
+                context.arc(
+                    originX +
+                        point[0] *
+                        scale,
+
+                    originY +
+                        point[1] *
+                        scale,
+
+                    Math.max(
+                        2.2,
+                        2.8 * scale
+                    ),
+
+                    0,
+                    Math.PI * 2
+                );
+
+                context.fillStyle =
+                    "rgba(255,255,255,.95)";
+
+                context.fill();
+            }
+
+            continue;
+        }
+
+
+        const amount =
+            Math.min(
+                remaining,
+                strokeLength
+            );
+
+
+        /*
+         * Walk along this stroke until
+         * we've consumed the available
+         * writing distance.
+         */
+
+        let consumed = 0;
+
+        context.beginPath();
+
+        for (
+            let index = 1;
+            index < stroke.length;
+            index++
+        ) {
+            const previous =
+                stroke[index - 1];
+
+            const current =
+                stroke[index];
+
+            const dx =
+                current[0] -
+                previous[0];
+
+            const dy =
+                current[1] -
+                previous[1];
+
+            const segmentLength =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+            if (
+                consumed +
+                segmentLength <=
+                amount
+            ) {
+                if (
+                    index === 1
+                ) {
+                    context.moveTo(
+                        originX +
+                            previous[0] *
+                            scale,
+
+                        originY +
+                            previous[1] *
+                            scale
+                    );
+                }
+
+                context.lineTo(
+                    originX +
+                        current[0] *
+                        scale,
+
+                    originY +
+                        current[1] *
+                        scale
+                );
+
+                consumed +=
+                    segmentLength;
+
+                continue;
+            }
+
+
+            /*
+             * Partial segment:
+             * interpolate the pen position.
+             */
+
+            const remainingSegment =
+                amount -
+                consumed;
+
+            const ratio =
+                segmentLength > 0
+                    ? remainingSegment /
+                      segmentLength
+                    : 0;
+
+            const x =
+                previous[0] +
+                dx * ratio;
+
+            const y =
+                previous[1] +
+                dy * ratio;
+
+
+            if (
+                index === 1
+            ) {
+                context.moveTo(
+                    originX +
+                        previous[0] *
+                        scale,
+
+                    originY +
+                        previous[1] *
+                        scale
+                );
+            }
+
+            context.lineTo(
+                originX +
+                    x *
+                    scale,
+
+                originY +
+                    y *
+                    scale
+            );
+
+            consumed =
+                amount;
+
+            break;
+        }
+
+        context.stroke();
+
+        remaining -=
+            Math.min(
+                amount,
+                strokeLength
+            );
+    }
+
+
+    context.restore();
+}
+
+
+function startupDraw(
+    timestamp
+) {
+    if (!startupRunning) {
+        return;
+    }
+
+    const context =
+        startupState.context;
+
+    const elapsed =
+        timestamp -
+        startupState.startedAt;
+
+    const normalized =
+        startupClamp(
+            elapsed /
+            STARTUP_DURATION,
+            0,
+            1
+        );
+
+    context.clearRect(
+        0,
+        0,
+        startupState.width,
+        startupState.height
+    );
+
+    startupDrawBackground(
+        context,
+        elapsed
+    );
+
+    const energy =
+        startupClamp(
+            normalized * 3,
+            0,
+            1
+        );
+
+    startupDrawParticles(
+        context,
+        elapsed,
+        energy
+    );
+
+    startupDrawEnergy(
+        context,
+        elapsed,
+        energy
+    );
+
+    const coreProgress =
+        startupEase(
+            startupClamp(
+                (normalized - .14) / .25,
+                0,
+                1
+            )
+        );
+
+    startupDrawCore(
+        context,
+        elapsed,
+        coreProgress
+    );
+
+    const signatureProgress =
+        startupClamp(
+            (normalized - .62) / .20,
+            0,
+            1
+        );
+
+    if (signatureProgress > 0) {
+        startupDrawSignature(
+            context,
+            signatureProgress
+        );
+    }
+
+    startupFrame =
+        requestAnimationFrame(
+            startupDraw
+        );
+}
+
+function startupSetReadout(
+    phase,
+    detail,
+    progress
+) {
+    setText(
+        "startup-phase",
+        phase
+    );
+
+    setText(
+        "startup-detail",
+        detail
+    );
+
+    const bar =
+        byId(
+            "startup-progress-bar"
+        );
+
+    if (bar) {
+        bar.style.width =
+            `${progress}%`;
+    }
+}
+
+
+function startupWait(
+    milliseconds
+) {
+    return new Promise(
+        resolve =>
+            window.setTimeout(
+                resolve,
+                milliseconds
+            )
+    );
+}
+
+
+function startupStop() {
+    startupRunning = false;
+
+    if (startupFrame) {
+        cancelAnimationFrame(
+            startupFrame
+        );
+
+        startupFrame = null;
+    }
+
+    if (startupResizeHandler) {
+        window.removeEventListener(
+            "resize",
+            startupResizeHandler
+        );
+
+        startupResizeHandler = null;
+    }
+}
+
+
+async function runStartupSequence() {
+    if (startupRunning) {
+        return;
+    }
+
+    const overlay =
+        byId(
+            "startup-overlay"
+        );
+
+    const canvas =
+        byId(
+            "startup-canvas"
+        );
+
+    if (!overlay || !canvas) {
+        return;
+    }
+
+    startupStop();
+
+    startupRunning = true;
+
+    startupState.canvas =
+        canvas;
+
+    startupState.context =
+        canvas.getContext("2d");
+
+    overlay.classList.remove(
+        "hidden"
+    );
+
+    overlay.setAttribute(
+        "aria-hidden",
+        "false"
+    );
+
+    const readout =
+        byId(
+            "startup-readout"
+        );
+
+    const identity =
+        byId(
+            "startup-identity"
+        );
+
+    if (readout) {
+        readout.classList.remove(
+            "visible"
+        );
+    }
+
+    if (identity) {
+        identity.classList.remove(
+            "visible"
+        );
+    }
+
+    startupResize();
+
+    startupCreateParticles();
+
+    startupCreateStars();
+
+    startupState.startedAt =
+        performance.now();
+
+    startupFrame =
+        requestAnimationFrame(
+            startupDraw
+        );
+
+    startupResizeHandler =
+        startupResize;
+
+    window.addEventListener(
+        "resize",
+        startupResizeHandler
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 0. BLACK
+     * -----------------------------------------------------
+     */
+
+    startupSetReadout(
+        "",
+        "",
+        0
+    );
+
+    await startupWait(
+        300
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 1. FIELD
+     * -----------------------------------------------------
+     */
+
+    if (!startupRunning) {
+        return;
+    }
+
+    if (readout) {
+        readout.classList.add(
+            "visible"
+        );
+    }
+
+    startupSetReadout(
+        "WAKE",
+        "Establishing presence",
+        12
+    );
+
+    await startupWait(
+        850
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 2. CORE
+     * -----------------------------------------------------
+     */
+
+    if (!startupRunning) {
+        return;
+    }
+
+    startupSetReadout(
+        "CORE",
+        "Neural core online",
+        30
+    );
+
+    await startupWait(
+        950
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 3. SYSTEM
+     * -----------------------------------------------------
+     */
+
+    if (!startupRunning) {
+        return;
+    }
+
+    startupSetReadout(
+        "SYSTEM",
+        "Connecting local services",
+        52
+    );
+
+    await startupWait(
+        850
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 4. IDENTITY
+     * -----------------------------------------------------
+     */
+
+    if (!startupRunning) {
+        return;
+    }
+
+    startupSetReadout(
+        "IDENTITY",
+        "Recognizing L.U.N.A.",
+        70
+    );
+
+    await startupWait(
+        350
+    );
+
+    /*
+     * Let the drawn signature finish.
+     */
+
+    await startupWait(
+        950
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 5. ONLINE
+     * -----------------------------------------------------
+     */
+
+    if (!startupRunning) {
+        return;
+    }
+
+    if (identity) {
+        identity.classList.add(
+            "visible"
+        );
+    }
+
+    startupSetReadout(
+        "ONLINE",
+        "Lowkey useful neural assistant",
+        100
+    );
+
+    await startupWait(
+        700
+    );
+
+    /*
+     * -----------------------------------------------------
+     * 6. EXIT
+     * -----------------------------------------------------
+     */
+
+    startupStop();
+
+    if (readout) {
+        readout.classList.remove(
+            "visible"
+        );
+    }
+
+    if (identity) {
+        identity.classList.remove(
+            "visible"
+        );
+    }
+
+    overlay.classList.add(
+        "hidden"
+    );
+
+    overlay.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+}
+
 
 /* =========================================================
    MAIN RENDER
@@ -5280,6 +6708,24 @@ function renderTelemetry(
     const dashboard =
         telemetry.dashboard ?? {};
 
+    const bootId =
+        dashboard.boot?.boot_id;
+
+    if (
+        bootId &&
+        bootId !==
+            localStorage.getItem(
+                "luna-last-boot-id"
+            )
+    ) {
+        localStorage.setItem(
+            "luna-last-boot-id",
+            bootId
+        );
+
+        runStartupSequence();
+    }
+
     const state =
         dashboard.state ?? "starting";
 
@@ -5291,7 +6737,8 @@ function renderTelemetry(
 
 
     if (
-        !demoRunning
+        !demoRunning &&
+        !startupRunning
     ) {
         const presentationActive =
             renderPresentation(
