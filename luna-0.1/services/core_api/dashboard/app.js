@@ -1075,7 +1075,7 @@ function renderPresentation(
    ========================================================= */
 
 const DEMO_STEPS = [
-    { id: "intro", duration: 9000 },
+    { id: "intro", duration: 10000 },
     { id: "runtime", duration: 5200 },
     { id: "services", duration: 5600 },
     { id: "intelligence", duration: 5600 },
@@ -1343,59 +1343,78 @@ function renderDemoIntro() {
         "demo-writing-svg"
     );
 
+    /*
+       Clean geometric L.U.N.A.
+
+       These are intentionally simple,
+       straight/controlled strokes.
+       The orb is drawing a logo,
+       not handwriting.
+    */
+
     const pathData = [
         // L
         `
         M 151 43
-        C 149 58 150 82 151 102
-        C 166 104 185 104 203 102
+        L 151 102
+        L 201 102
         `,
 
         // .
         `
-        M 215 101
-        C 215 99 218 99 218 101
-        C 218 103 215 103 215 101
+        M 213.5 102
+        C 213.5 100.6 214.6 99.5 216 99.5
+        C 217.4 99.5 218.5 100.6 218.5 102
+        C 218.5 103.4 217.4 104.5 216 104.5
+        C 214.6 104.5 213.5 103.4 213.5 102
         `,
 
         // U
         `
         M 231 43
-        C 231 58 230 79 233 91
-        C 236 103 245 108 255 103
-        C 266 98 271 88 271 75
-        L 272 43
+        L 231 82
+        C 231 95 237 102 251 102
+        C 265 102 271 95 271 82
+        L 271 43
         `,
 
         // .
         `
-        M 284 101
-        C 284 99 287 99 287 101
-        C 287 103 284 103 284 101
+        M 283.5 102
+        C 283.5 100.6 284.6 99.5 286 99.5
+        C 287.4 99.5 288.5 100.6 288.5 102
+        C 288.5 103.4 287.4 104.5 286 104.5
+        C 284.6 104.5 283.5 103.4 283.5 102
         `,
 
         // N
         `
-        M 300 102
-        C 301 83 301 61 301 43
-        C 315 62 330 82 345 102
-        C 346 82 346 61 346 43
+        M 301 102
+        L 301 43
+        L 346 102
+        L 346 43
         `,
 
         // .
         `
-        M 358 101
-        C 358 99 361 99 361 101
-        C 361 103 358 103 358 101
+        M 358.5 102
+        C 358.5 100.6 359.6 99.5 361 99.5
+        C 362.4 99.5 363.5 100.6 363.5 102
+        C 363.5 103.4 362.4 104.5 361 104.5
+        C 359.6 104.5 358.5 103.4 358.5 102
         `,
 
         // A
         `
         M 380 102
-        C 391 80 401 58 412 43
-        C 423 61 434 82 445 102
-        M 393 80
-        C 405 79 417 79 430 80
+        L 412 43
+        L 444 102
+        `,
+
+        // A crossbar
+        `
+        M 394 80
+        L 430 80
         `,
     ];
 
@@ -1428,16 +1447,28 @@ function renderDemoIntro() {
                 );
             }
 
+            const length =
+                path.getTotalLength();
+
+            path.style.strokeDasharray =
+                `${length}`;
+
+            path.style.strokeDashoffset =
+                `${length}`;
+
             svg.appendChild(path);
+
             paths.push(path);
         }
     );
 
-    writing.appendChild(svg);
+    writing.appendChild(
+        svg
+    );
 
     /*
-       Move the REAL idle orb into the writing scene.
-       We keep a reference so STOP can always restore it.
+       Move the REAL idle orb into the
+       writing scene.
     */
 
     const orb =
@@ -1456,8 +1487,12 @@ function renderDemoIntro() {
             "demo-writing-orb"
         );
 
-        orb.style.left = "50%";
-        orb.style.top = "50%";
+        orb.style.left =
+            "50%";
+
+        orb.style.top =
+            "50%";
+
         orb.style.transform =
             "translate(-50%, -50%) scale(1)";
     }
@@ -1472,18 +1507,11 @@ function renderDemoIntro() {
         "You asked what I'm for. Let me show you."
     );
 
-    /*
-       Wait one frame so the SVG has its final
-       rendered dimensions before we calculate
-       the orb's starting position.
-    */
-
     requestAnimationFrame(() => {
-        if (!demoRunning) {
-            return;
-        }
-
-        if (!demoWritingOrb) {
+        if (
+            !demoRunning ||
+            !demoWritingOrb
+        ) {
             return;
         }
 
@@ -1502,39 +1530,42 @@ function renderDemoIntro() {
 
         const svgToWriting = (
             point
-        ) => {
-            return {
-                x:
-                    svgRect.left -
-                    writingRect.left +
-                    (
-                        point.x /
-                        620
-                    ) *
-                    svgRect.width,
+        ) => ({
+            x:
+                svgRect.left -
+                writingRect.left +
+                (
+                    point.x /
+                    620
+                ) *
+                svgRect.width,
 
-                y:
-                    svgRect.top -
-                    writingRect.top +
-                    (
-                        point.y /
-                        150
-                    ) *
-                    svgRect.height,
-            };
-        };
+            y:
+                svgRect.top -
+                writingRect.top +
+                (
+                    point.y /
+                    150
+                ) *
+                svgRect.height,
+        });
 
         const start =
-            firstPath.getPointAtLength(0);
+            firstPath.getPointAtLength(
+                0
+            );
 
         const startPosition =
-            svgToWriting(start);
+            svgToWriting(
+                start
+            );
 
         /*
-           First movement:
-           center → beginning of L.
-           The orb gets slightly larger
-           as it reaches the writing position.
+           Transition is ON here.
+
+           The orb smoothly travels from
+           the center to the beginning
+           of the L.
         */
 
         demoWritingOrb.style.left =
@@ -1544,12 +1575,21 @@ function renderDemoIntro() {
             `${startPosition.y}px`;
 
         demoWritingOrb.style.transform =
-            "translate(-50%, -50%) scale(1.28)";
+            "translate(-50%, -50%) scale(1.08)";
 
         window.setTimeout(() => {
             if (!demoRunning) {
                 return;
             }
+
+            /*
+               From this point onward the orb
+               must track the stroke EXACTLY.
+            */
+
+            demoWritingOrb.classList.add(
+                "is-writing"
+            );
 
             animateDemoWriting(
                 paths,
@@ -1559,6 +1599,7 @@ function renderDemoIntro() {
         }, 1050);
     });
 }
+
 
 function animateDemoWriting(
     paths,
@@ -1600,8 +1641,7 @@ function animateDemoWriting(
     };
 
     /*
-       Make the handwriting itself appear
-       progressively as the orb moves.
+       Every stroke starts completely hidden.
     */
 
     paths.forEach(
@@ -1619,32 +1659,134 @@ function animateDemoWriting(
 
     let pathIndex = 0;
     let distance = 0;
+
     let lastTimestamp = null;
-    let pauseUntil = 0;
+
+    /*
+       When a stroke finishes, the orb enters
+       a travel phase instead of teleporting.
+    */
+
+    let traveling = false;
+    let travelStart = null;
+    let travelDuration = 0;
+    let travelFrom = null;
+    let travelTo = null;
 
     const pixelsPerSecond = 92;
+
+    const travelSpeed = 240;
 
     const writeNextPath = (
         timestamp
     ) => {
-        if (!demoRunning) {
-            demoIntroAnimationFrame = null;
+        if (
+            !demoRunning ||
+            !demoWritingOrb
+        ) {
+            demoIntroAnimationFrame =
+                null;
+
             return;
         }
 
         const path =
             paths[pathIndex];
 
+        /*
+           Everything is finished.
+        */
+
         if (!path) {
-            demoIntroAnimationFrame = null;
+            demoIntroAnimationFrame =
+                null;
 
             demoWritingOrb.style.transform =
-                "translate(-50%, -50%) scale(1.12)";
+                "translate(-50%, -50%) scale(1.02)";
 
             return;
         }
 
-        if (pauseUntil > timestamp) {
+        /*
+           --------------------------------
+           SMOOTH TRAVEL BETWEEN STROKES
+           --------------------------------
+        */
+
+        if (traveling) {
+            if (
+                travelStart === null
+            ) {
+                travelStart =
+                    timestamp;
+            }
+
+            const elapsed =
+                timestamp -
+                travelStart;
+
+            const progress =
+                Math.min(
+                    1,
+                    elapsed /
+                    travelDuration
+                );
+
+            /*
+               Smooth ease-in-out so the orb
+               doesn't snap at either end.
+            */
+
+            const eased =
+                progress < 0.5
+                    ? 2 *
+                      progress *
+                      progress
+                    : 1 -
+                      (
+                          Math.pow(
+                              -2 *
+                              progress +
+                              2,
+                              2
+                          ) /
+                          2
+                      );
+
+            const x =
+                travelFrom.x +
+                (
+                    travelTo.x -
+                    travelFrom.x
+                ) *
+                eased;
+
+            const y =
+                travelFrom.y +
+                (
+                    travelTo.y -
+                    travelFrom.y
+                ) *
+                eased;
+
+            demoWritingOrb.style.left =
+                `${x}px`;
+
+            demoWritingOrb.style.top =
+                `${y}px`;
+
+            demoWritingOrb.style.transform =
+                "translate(-50%, -50%) scale(1.04)";
+
+            if (
+                progress >= 1
+            ) {
+                traveling = false;
+                travelStart = null;
+                lastTimestamp = null;
+                distance = 0;
+            }
+
             demoIntroAnimationFrame =
                 requestAnimationFrame(
                     writeNextPath
@@ -1653,8 +1795,17 @@ function animateDemoWriting(
             return;
         }
 
-        if (lastTimestamp === null) {
-            lastTimestamp = timestamp;
+        /*
+           --------------------------------
+           DRAW CURRENT STROKE
+           --------------------------------
+        */
+
+        if (
+            lastTimestamp === null
+        ) {
+            lastTimestamp =
+                timestamp;
         }
 
         const delta =
@@ -1664,27 +1815,24 @@ function animateDemoWriting(
                 lastTimestamp
             );
 
-        lastTimestamp = timestamp;
-
-        /*
-           Tiny speed variation keeps it from
-           looking completely robotic, while
-           the actual position still comes
-           directly from the path.
-        */
+        lastTimestamp =
+            timestamp;
 
         const speed =
             pixelsPerSecond *
             (
-                0.90 +
+                0.94 +
                 Math.sin(
-                    timestamp * 0.0037
-                ) * 0.08
+                    timestamp * 0.003
+                ) * 0.04
             );
 
         distance +=
             speed *
-            (delta / 1000);
+            (
+                delta /
+                1000
+            );
 
         const length =
             path.getTotalLength();
@@ -1692,7 +1840,8 @@ function animateDemoWriting(
         const progress =
             Math.min(
                 1,
-                distance / length
+                distance /
+                length
             );
 
         const point =
@@ -1704,7 +1853,9 @@ function animateDemoWriting(
             );
 
         const position =
-            svgToWriting(point);
+            svgToWriting(
+                point
+            );
 
         demoWritingOrb.style.left =
             `${position.x}px`;
@@ -1713,28 +1864,107 @@ function animateDemoWriting(
             `${position.y}px`;
 
         demoWritingOrb.style.transform =
-            "translate(-50%, -50%) scale(1.22)";
+            "translate(-50%, -50%) scale(1.04)";
 
         path.style.strokeDashoffset =
             `${length * (1 - progress)}`;
 
-        if (progress >= 1) {
+        /*
+           --------------------------------
+           STROKE FINISHED
+           --------------------------------
+        */
+
+        if (
+            progress >= 1
+        ) {
+            const endPoint =
+                path.getPointAtLength(
+                    length
+                );
+
+            const endPosition =
+                svgToWriting(
+                    endPoint
+                );
+
             pathIndex += 1;
-            distance = 0;
-            lastTimestamp = null;
+
+            const nextPath =
+                paths[pathIndex];
 
             /*
-               Small human-looking pause before
-               lifting the pen to the next stroke.
+               No next stroke = we're done.
             */
 
-            pauseUntil =
-                timestamp +
-                (
-                    pathIndex === paths.length
-                        ? 260
-                        : 110
+            if (!nextPath) {
+                demoWritingOrb.style.left =
+                    `${endPosition.x}px`;
+
+                demoWritingOrb.style.top =
+                    `${endPosition.y}px`;
+
+                demoWritingOrb.style.transform =
+                    "translate(-50%, -50%) scale(1.02)";
+
+                demoIntroAnimationFrame =
+                    null;
+
+                return;
+            }
+
+            /*
+               Find the beginning of the next
+               stroke and smoothly travel there.
+            */
+
+            const nextStart =
+                nextPath.getPointAtLength(
+                    0
                 );
+
+            const nextPosition =
+                svgToWriting(
+                    nextStart
+                );
+
+            const dx =
+                nextPosition.x -
+                endPosition.x;
+
+            const dy =
+                nextPosition.y -
+                endPosition.y;
+
+            const travelDistance =
+                Math.sqrt(
+                    dx * dx +
+                    dy * dy
+                );
+
+            travelFrom =
+                endPosition;
+
+            travelTo =
+                nextPosition;
+
+            travelDuration =
+                Math.max(
+                    90,
+                    (
+                        travelDistance /
+                        travelSpeed
+                    ) *
+                    1000
+                );
+
+            travelStart =
+                timestamp;
+
+            traveling = true;
+
+            distance = 0;
+            lastTimestamp = null;
         }
 
         demoIntroAnimationFrame =
@@ -4694,26 +4924,45 @@ function renderGenericPresentation(
 
 
 /* =========================================================
-   BOOT SEQUENCE
+   L.U.N.A. CINEMATIC STARTUP SEQUENCE
    ========================================================= */
 
+let startupAnimationFrame = null;
+let startupSignaturePaths = [];
+let startupSignatureLength = 0;
+
+
 function setBootProgress(percent) {
+    const value =
+        Math.max(
+            0,
+            Math.min(
+                100,
+                percent
+            )
+        );
+
     const bar =
-        byId("startup-progress-bar");
+        byId(
+            "startup-progress-bar"
+        );
 
     if (bar) {
         bar.style.width =
-            `${Math.max(0, Math.min(100, percent))}%`;
+            `${value}%`;
     }
 
     const bootBar =
-        byId("boot-progress-bar");
+        byId(
+            "boot-progress-bar"
+        );
 
     if (bootBar) {
         bootBar.style.width =
-            `${Math.max(0, Math.min(100, percent))}%`;
+            `${value}%`;
     }
 }
+
 
 function setBootPhase(
     phase,
@@ -4735,105 +4984,15 @@ function setBootPhase(
         phase
     );
 
-    setBootProgress(percent);
-}
-
-function hideStartupOverlay() {
-    const overlay =
-        byId("startup-overlay");
-
-    if (!overlay) {
-        return;
-    }
-
-    overlay.style.opacity = "0";
-
-    window.setTimeout(
-        () => {
-            overlay.classList.add(
-                "hidden"
-            );
-        },
-        700
+    setBootProgress(
+        percent
     );
 }
 
-async function runStartupSequence(
-    telemetry
+
+function wait(
+    milliseconds
 ) {
-    if (startupRunning) {
-        return;
-    }
-
-    startupRunning = true;
-
-    const overlay =
-        byId("startup-overlay");
-
-    if (overlay) {
-        overlay.classList.remove(
-            "hidden"
-        );
-
-        overlay.style.opacity = "1";
-    }
-
-    const boot =
-        telemetry?.dashboard?.boot;
-
-    setBootPhase(
-        "INITIALIZING",
-        "Establishing core systems",
-        12
-    );
-
-    await wait(350);
-
-    setBootPhase(
-        "CORE",
-        "Verifying L.U.N.A. core",
-        35
-    );
-
-    await wait(350);
-
-    setBootPhase(
-        "VOICE",
-        "Checking voice systems",
-        58
-    );
-
-    await wait(350);
-
-    setBootPhase(
-        "NEURAL",
-        "Bringing intelligence online",
-        78
-    );
-
-    await wait(350);
-
-    setBootPhase(
-        "ONLINE",
-        "L.U.N.A. is ready",
-        100
-    );
-
-    await wait(500);
-
-    if (boot?.boot_id) {
-        localStorage.setItem(
-            "luna_last_boot_id",
-            boot.boot_id
-        );
-    }
-
-    hideStartupOverlay();
-
-    startupRunning = false;
-}
-
-function wait(milliseconds) {
     return new Promise(
         resolve =>
             window.setTimeout(
@@ -4842,6 +5001,701 @@ function wait(milliseconds) {
             )
     );
 }
+
+
+function stopStartupAnimation() {
+    if (
+        startupAnimationFrame !== null
+    ) {
+        cancelAnimationFrame(
+            startupAnimationFrame
+        );
+
+        startupAnimationFrame = null;
+    }
+}
+
+
+function resetStartupSignature() {
+    stopStartupAnimation();
+
+    startupSignaturePaths = [];
+    startupSignatureLength = 0;
+
+    const paths =
+        document.querySelectorAll(
+            "#startup-signature-svg path"
+        );
+
+    paths.forEach(
+        path => {
+            const length =
+                path.getTotalLength();
+
+            path.style.strokeDasharray =
+                `${length}`;
+
+            path.style.strokeDashoffset =
+                `${length}`;
+
+            startupSignaturePaths.push({
+                path,
+                length,
+            });
+
+            startupSignatureLength +=
+                length;
+        }
+    );
+}
+
+
+function animateStartupSignature(
+    duration = 760
+) {
+    resetStartupSignature();
+
+    const signature =
+        byId(
+            "startup-signature"
+        );
+
+    const subtitle =
+        byId(
+            "startup-signature-subtitle"
+        );
+
+    const pen =
+        byId(
+            "startup-pen"
+        );
+
+    if (!signature) {
+        return Promise.resolve();
+    }
+
+    signature.classList.add(
+        "is-visible"
+    );
+
+    if (subtitle) {
+        subtitle.classList.remove(
+            "visible"
+        );
+    }
+
+    const start =
+        performance.now();
+
+    let completed = false;
+
+    return new Promise(
+        resolve => {
+
+            function frame(
+                now
+            ) {
+                if (
+                    completed
+                ) {
+                    return;
+                }
+
+                const elapsed =
+                    now - start;
+
+                const progress =
+                    Math.min(
+                        1,
+                        elapsed /
+                        duration
+                    );
+
+                /*
+                 * Slight easing.
+                 *
+                 * The beginning is quick,
+                 * the final stroke settles
+                 * smoothly.
+                 */
+
+                const eased =
+                    1 -
+                    Math.pow(
+                        1 - progress,
+                        2.4
+                    );
+
+                let remaining =
+                    startupSignatureLength *
+                    eased;
+
+                let activePath =
+                    null;
+
+                let activeDistance =
+                    0;
+
+                for (
+                    const item
+                    of startupSignaturePaths
+                ) {
+
+                    if (
+                        remaining >=
+                        item.length
+                    ) {
+                        item.path.style.strokeDashoffset =
+                            "0";
+
+                        remaining -=
+                            item.length;
+
+                        continue;
+                    }
+
+                    activePath =
+                        item.path;
+
+                    activeDistance =
+                        remaining;
+
+                    item.path.style.strokeDashoffset =
+                        `${item.length - remaining}`;
+
+                    break;
+                }
+
+                if (
+                    pen &&
+                    activePath
+                ) {
+                    try {
+                        const point =
+                            activePath.getPointAtLength(
+                                activeDistance
+                            );
+
+                        const svg =
+                            byId(
+                                "startup-signature-svg"
+                            );
+
+                        const rect =
+                            svg?.getBoundingClientRect();
+
+                        const viewBoxWidth =
+                            520;
+
+                        const viewBoxHeight =
+                            130;
+
+                        if (
+                            rect &&
+                            svg
+                        ) {
+                            const scaleX =
+                                rect.width /
+                                viewBoxWidth;
+
+                            const scaleY =
+                                rect.height /
+                                viewBoxHeight;
+
+                            pen.style.left =
+                                `${rect.left +
+                                point.x *
+                                scaleX}px`;
+
+                            pen.style.top =
+                                `${rect.top +
+                                point.y *
+                                scaleY}px`;
+                        }
+                    } catch {
+                        // Keep signature animation alive.
+                    }
+                }
+
+                if (
+                    progress >= 1
+                ) {
+                    startupSignaturePaths.forEach(
+                        item => {
+                            item.path.style.strokeDashoffset =
+                                "0";
+                        }
+                    );
+
+                    if (pen) {
+                        pen.style.opacity =
+                            "0";
+                    }
+
+                    if (subtitle) {
+                        subtitle.classList.add(
+                            "visible"
+                        );
+                    }
+
+                    completed = true;
+
+                    startupAnimationFrame =
+                        null;
+
+                    window.setTimeout(
+                        resolve,
+                        260
+                    );
+
+                    return;
+                }
+
+                startupAnimationFrame =
+                    requestAnimationFrame(
+                        frame
+                    );
+            }
+
+            startupAnimationFrame =
+                requestAnimationFrame(
+                    frame
+                );
+        }
+    );
+}
+
+
+function updateStartupServices(
+    services
+) {
+    const container =
+        byId(
+            "startup-services"
+        );
+
+    if (!container) {
+        return;
+    }
+
+    const serviceList =
+        services ?? [];
+
+    document
+        .querySelectorAll(
+            ".startup-service"
+        )
+        .forEach(
+            element => {
+
+                const name =
+                    element.dataset.service;
+
+                const service =
+                    serviceList.find(
+                        item =>
+                            item.name ===
+                            name
+                    );
+
+                const state =
+                    element.querySelector(
+                        ".startup-service-state"
+                    );
+
+                const active =
+                    service?.active === true;
+
+                const serviceState =
+                    String(
+                        service?.state ??
+                        "checking"
+                    ).toUpperCase();
+
+                element.classList.remove(
+                    "online",
+                    "warning",
+                    "error"
+                );
+
+                if (active) {
+                    element.classList.add(
+                        "online"
+                    );
+
+                    if (state) {
+                        state.textContent =
+                            "ONLINE";
+                    }
+
+                    return;
+                }
+
+                if (
+                    serviceState ===
+                    "DEVELOPMENT"
+                ) {
+                    element.classList.add(
+                        "warning"
+                    );
+
+                    if (state) {
+                        state.textContent =
+                            "DEVELOPMENT";
+                    }
+
+                    return;
+                }
+
+                element.classList.add(
+                    "error"
+                );
+
+                if (state) {
+                    state.textContent =
+                        serviceState ===
+                        "CHECKING"
+                            ? "CHECKING"
+                            : "OFFLINE";
+                }
+            }
+        );
+}
+
+
+function prepareStartup() {
+    const overlay =
+        byId(
+            "startup-overlay"
+        );
+
+    if (!overlay) {
+        return;
+    }
+
+    stopStartupAnimation();
+
+    overlay.classList.remove(
+        "hidden"
+    );
+
+    overlay.classList.remove(
+        "startup-awake",
+        "startup-core-active",
+        "startup-services-active",
+        "startup-signature-active",
+        "startup-dashboard"
+    );
+
+    overlay.classList.add(
+        "startup-active"
+    );
+
+    overlay.style.opacity =
+        "1";
+
+    resetStartupSignature();
+
+    const pen =
+        byId(
+            "startup-pen"
+        );
+
+    if (pen) {
+        pen.style.opacity =
+            "0";
+    }
+
+    const signature =
+        byId(
+            "startup-signature"
+        );
+
+    if (signature) {
+        signature.classList.remove(
+            "is-visible"
+        );
+    }
+
+    const subtitle =
+        byId(
+            "startup-signature-subtitle"
+        );
+
+    if (subtitle) {
+        subtitle.classList.remove(
+            "visible"
+        );
+    }
+
+    document
+        .querySelectorAll(
+            ".startup-service"
+        )
+        .forEach(
+            element => {
+                element.classList.remove(
+                    "online",
+                    "warning",
+                    "error"
+                );
+
+                const state =
+                    element.querySelector(
+                        ".startup-service-state"
+                    );
+
+                if (state) {
+                    state.textContent =
+                        "VERIFYING";
+                }
+            }
+        );
+}
+
+
+function revealDashboard() {
+    const overlay =
+        byId(
+            "startup-overlay"
+        );
+
+    if (!overlay) {
+        return;
+    }
+
+    overlay.classList.add(
+        "startup-dashboard"
+    );
+
+    /*
+     * Give the dashboard a tiny moment
+     * to emerge through the startup field.
+     */
+
+    window.setTimeout(
+        () => {
+            overlay.style.opacity =
+                "0";
+
+            overlay.classList.remove(
+                "startup-active"
+            );
+
+            window.setTimeout(
+                () => {
+                    overlay.classList.add(
+                        "hidden"
+                    );
+
+                    overlay.style.opacity =
+                        "";
+
+                    /*
+                     * Make absolutely sure
+                     * the real idle state is
+                     * visible after startup.
+                     */
+
+                    if (
+                        !demoRunning
+                    ) {
+                        renderState(
+                            "idle",
+                            "L.U.N.A. online"
+                        );
+                    }
+                },
+                650
+            );
+
+        },
+        180
+    );
+}
+
+
+async function runStartupSequence(
+    telemetry
+) {
+    if (
+        startupRunning
+    ) {
+        return;
+    }
+
+    startupRunning = true;
+
+    prepareStartup();
+
+    const boot =
+        telemetry?.dashboard?.boot;
+
+    let services = [];
+
+    try {
+        services =
+            await getServices();
+    } catch {
+        services = [];
+    }
+
+    updateStartupServices(
+        services
+    );
+
+
+    /* ---------------------------------------------------------
+       PHASE 01 — SILENCE
+       --------------------------------------------------------- */
+
+    setBootPhase(
+        " ",
+        "",
+        0
+    );
+
+    await wait(
+        220
+    );
+
+
+    /* ---------------------------------------------------------
+       PHASE 02 — WAKE
+       --------------------------------------------------------- */
+
+    const overlay =
+        byId(
+            "startup-overlay"
+        );
+
+    overlay?.classList.add(
+        "startup-awake"
+    );
+
+    setBootPhase(
+        "WAKE",
+        "Establishing local runtime",
+        12
+    );
+
+    await wait(
+        650
+    );
+
+
+    /* ---------------------------------------------------------
+       PHASE 03 — CORE
+       --------------------------------------------------------- */
+
+    overlay?.classList.add(
+        "startup-core-active"
+    );
+
+    setBootPhase(
+        "CORE",
+        "Forming L.U.N.A. core",
+        28
+    );
+
+    await wait(
+        720
+    );
+
+
+    /* ---------------------------------------------------------
+       PHASE 04 — SERVICES
+       --------------------------------------------------------- */
+
+    overlay?.classList.add(
+        "startup-services-active"
+    );
+
+    setBootPhase(
+        "SYSTEM",
+        "Bringing local services online",
+        48
+    );
+
+    await wait(
+        620
+    );
+
+
+    /*
+     * Re-check service state after the
+     * constellation has appeared.
+     */
+
+    try {
+        services =
+            await getServices();
+
+        updateStartupServices(
+            services
+        );
+    } catch {
+        // Keep the last known state.
+    }
+
+
+    /* ---------------------------------------------------------
+       PHASE 05 — IDENTITY
+       --------------------------------------------------------- */
+
+    overlay?.classList.add(
+        "startup-signature-active"
+    );
+
+    setBootPhase(
+        "IDENTITY",
+        "Loading assistant profile",
+        70
+    );
+
+    await wait(
+        280
+    );
+
+    await animateStartupSignature(
+        820
+    );
+
+
+    /* ---------------------------------------------------------
+       PHASE 06 — ONLINE
+       --------------------------------------------------------- */
+
+    setBootPhase(
+        "ONLINE",
+        "L.U.N.A. is ready",
+        100
+    );
+
+    await wait(
+        480
+    );
+
+
+    /* ---------------------------------------------------------
+       FINALIZE
+       --------------------------------------------------------- */
+
+    if (
+        boot?.boot_id
+    ) {
+        localStorage.setItem(
+            "luna_last_boot_id",
+            boot.boot_id
+        );
+    }
+
+    revealDashboard();
+
+    startupRunning =
+        false;
+}
+
 
 function shouldRunStartup(
     telemetry
