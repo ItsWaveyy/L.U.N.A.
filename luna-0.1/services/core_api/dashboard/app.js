@@ -4980,7 +4980,7 @@ function setBootPhase(
     );
 
     setText(
-        "boot-status",
+        "startup-boot-status",
         phase
     );
 
@@ -5408,6 +5408,25 @@ function prepareStartup() {
 
     overlay.classList.add(
         "startup-active"
+    );
+
+
+    /*
+    * Startup owns the canvas.
+    *
+    * Do not allow the normal canvas
+    * state machine to remain visible
+    * underneath or alongside it.
+    */
+    for (
+        const id
+        of Object.values(STATE_VIEWS)
+    ) {
+        hide(id);
+    }
+
+    hide(
+        "canvas-presentation"
     );
 
 
