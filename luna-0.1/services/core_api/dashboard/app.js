@@ -3,7 +3,6 @@ const REFRESH_INTERVAL = 1000;
 let latestTelemetry = null;
 let latestServices = [];
 let lastBootId = null;
-let startupRunning = false;
 let toastTimeout = null;
 
 let demoRunning = false;
@@ -4930,6 +4929,7 @@ function renderGenericPresentation(
 let startupAnimationFrame = null;
 let startupSignaturePaths = [];
 let startupSignatureLength = 0;
+let startupRunning = false;
 
 
 function setBootProgress(percent) {
@@ -5016,6 +5016,10 @@ function stopStartupAnimation() {
 }
 
 
+/* =========================================================
+   SIGNATURE
+   ========================================================= */
+
 function resetStartupSignature() {
     stopStartupAnimation();
 
@@ -5029,29 +5033,37 @@ function resetStartupSignature() {
 
     paths.forEach(
         path => {
-            const length =
-                path.getTotalLength();
+            try {
+                const length =
+                    path.getTotalLength();
 
-            path.style.strokeDasharray =
-                `${length}`;
+                path.style.strokeDasharray =
+                    `${length}`;
 
-            path.style.strokeDashoffset =
-                `${length}`;
+                path.style.strokeDashoffset =
+                    `${length}`;
 
-            startupSignaturePaths.push({
-                path,
-                length,
-            });
+                startupSignaturePaths.push({
+                    path,
+                    length,
+                });
 
-            startupSignatureLength +=
-                length;
+                startupSignatureLength +=
+                    length;
+
+            } catch {
+                /*
+                 * If a browser cannot measure
+                 * the SVG path, leave it alone.
+                 */
+            }
         }
     );
 }
 
 
 function animateStartupSignature(
-    duration = 760
+    duration = 820
 ) {
     resetStartupSignature();
 
@@ -5070,13 +5082,13 @@ function animateStartupSignature(
             "startup-pen"
         );
 
-    if (!signature) {
+    if (
+        !signature ||
+        !startupSignaturePaths.length ||
+        !startupSignatureLength
+    ) {
         return Promise.resolve();
     }
-
-    signature.classList.add(
-        "is-visible"
-    );
 
     if (subtitle) {
         subtitle.classList.remove(
@@ -5084,10 +5096,18 @@ function animateStartupSignature(
         );
     }
 
+    if (pen) {
+        pen.style.opacity =
+            "1";
+    }
+
+    const svg =
+        byId(
+            "startup-signature-svg"
+        );
+
     const start =
         performance.now();
-
-    let completed = false;
 
     return new Promise(
         resolve => {
@@ -5096,8 +5116,13 @@ function animateStartupSignature(
                 now
             ) {
                 if (
-                    completed
+                    !startupRunning
                 ) {
+                    startupAnimationFrame =
+                        null;
+
+                    resolve();
+
                     return;
                 }
 
@@ -5110,14 +5135,6 @@ function animateStartupSignature(
                         elapsed /
                         duration
                     );
-
-                /*
-                 * Slight easing.
-                 *
-                 * The beginning is quick,
-                 * the final stroke settles
-                 * smoothly.
-                 */
 
                 const eased =
                     1 -
@@ -5166,9 +5183,16 @@ function animateStartupSignature(
                     break;
                 }
 
+
+                /*
+                 * Move the actual startup core
+                 * along the signature.
+                 */
+
                 if (
                     pen &&
-                    activePath
+                    activePath &&
+                    svg
                 ) {
                     try {
                         const point =
@@ -5176,50 +5200,37 @@ function animateStartupSignature(
                                 activeDistance
                             );
 
-                        const svg =
-                            byId(
-                                "startup-signature-svg"
-                            );
-
                         const rect =
-                            svg?.getBoundingClientRect();
+                            svg.getBoundingClientRect();
 
-                        const viewBoxWidth =
+                        const scaleX =
+                            rect.width /
                             520;
 
-                        const viewBoxHeight =
+                        const scaleY =
+                            rect.height /
                             130;
 
-                        if (
-                            rect &&
-                            svg
-                        ) {
-                            const scaleX =
-                                rect.width /
-                                viewBoxWidth;
+                        pen.style.left =
+                            `${rect.left +
+                            point.x *
+                            scaleX}px`;
 
-                            const scaleY =
-                                rect.height /
-                                viewBoxHeight;
+                        pen.style.top =
+                            `${rect.top +
+                            point.y *
+                            scaleY}px`;
 
-                            pen.style.left =
-                                `${rect.left +
-                                point.x *
-                                scaleX}px`;
-
-                            pen.style.top =
-                                `${rect.top +
-                                point.y *
-                                scaleY}px`;
-                        }
                     } catch {
-                        // Keep signature animation alive.
+                        // Keep animation alive.
                     }
                 }
+
 
                 if (
                     progress >= 1
                 ) {
+
                     startupSignaturePaths.forEach(
                         item => {
                             item.path.style.strokeDashoffset =
@@ -5238,24 +5249,24 @@ function animateStartupSignature(
                         );
                     }
 
-                    completed = true;
-
                     startupAnimationFrame =
                         null;
 
                     window.setTimeout(
                         resolve,
-                        260
+                        220
                     );
 
                     return;
                 }
+
 
                 startupAnimationFrame =
                     requestAnimationFrame(
                         frame
                     );
             }
+
 
             startupAnimationFrame =
                 requestAnimationFrame(
@@ -5266,18 +5277,13 @@ function animateStartupSignature(
 }
 
 
+/* =========================================================
+   SERVICE STATE
+   ========================================================= */
+
 function updateStartupServices(
     services
 ) {
-    const container =
-        byId(
-            "startup-services"
-        );
-
-    if (!container) {
-        return;
-    }
-
     const serviceList =
         services ?? [];
 
@@ -5312,13 +5318,17 @@ function updateStartupServices(
                         "checking"
                     ).toUpperCase();
 
+
                 element.classList.remove(
                     "online",
                     "warning",
                     "error"
                 );
 
-                if (active) {
+
+                if (
+                    active
+                ) {
                     element.classList.add(
                         "online"
                     );
@@ -5330,6 +5340,7 @@ function updateStartupServices(
 
                     return;
                 }
+
 
                 if (
                     serviceState ===
@@ -5347,6 +5358,7 @@ function updateStartupServices(
                     return;
                 }
 
+
                 element.classList.add(
                     "error"
                 );
@@ -5363,6 +5375,10 @@ function updateStartupServices(
 }
 
 
+/* =========================================================
+   PREPARE
+   ========================================================= */
+
 function prepareStartup() {
     const overlay =
         byId(
@@ -5370,14 +5386,16 @@ function prepareStartup() {
         );
 
     if (!overlay) {
-        return;
+        return false;
     }
 
     stopStartupAnimation();
 
+
     overlay.classList.remove(
         "hidden"
     );
+
 
     overlay.classList.remove(
         "startup-awake",
@@ -5387,14 +5405,18 @@ function prepareStartup() {
         "startup-dashboard"
     );
 
+
     overlay.classList.add(
         "startup-active"
     );
 
+
     overlay.style.opacity =
         "1";
 
+
     resetStartupSignature();
+
 
     const pen =
         byId(
@@ -5406,16 +5428,6 @@ function prepareStartup() {
             "0";
     }
 
-    const signature =
-        byId(
-            "startup-signature"
-        );
-
-    if (signature) {
-        signature.classList.remove(
-            "is-visible"
-        );
-    }
 
     const subtitle =
         byId(
@@ -5428,12 +5440,14 @@ function prepareStartup() {
         );
     }
 
+
     document
         .querySelectorAll(
             ".startup-service"
         )
         .forEach(
             element => {
+
                 element.classList.remove(
                     "online",
                     "warning",
@@ -5451,8 +5465,15 @@ function prepareStartup() {
                 }
             }
         );
+
+
+    return true;
 }
 
+
+/* =========================================================
+   DASHBOARD REVEAL
+   ========================================================= */
 
 function revealDashboard() {
     const overlay =
@@ -5464,38 +5485,39 @@ function revealDashboard() {
         return;
     }
 
+
     overlay.classList.add(
         "startup-dashboard"
     );
 
-    /*
-     * Give the dashboard a tiny moment
-     * to emerge through the startup field.
-     */
 
     window.setTimeout(
         () => {
+
             overlay.style.opacity =
                 "0";
 
-            overlay.classList.remove(
-                "startup-active"
-            );
 
             window.setTimeout(
                 () => {
+
                     overlay.classList.add(
                         "hidden"
                     );
 
+                    overlay.classList.remove(
+                        "startup-active",
+                        "startup-awake",
+                        "startup-core-active",
+                        "startup-services-active",
+                        "startup-signature-active",
+                        "startup-dashboard"
+                    );
+
+
                     overlay.style.opacity =
                         "";
 
-                    /*
-                     * Make absolutely sure
-                     * the real idle state is
-                     * visible after startup.
-                     */
 
                     if (
                         !demoRunning
@@ -5505,6 +5527,7 @@ function revealDashboard() {
                             "L.U.N.A. online"
                         );
                     }
+
                 },
                 650
             );
@@ -5515,6 +5538,10 @@ function revealDashboard() {
 }
 
 
+/* =========================================================
+   MAIN STARTUP
+   ========================================================= */
+
 async function runStartupSequence(
     telemetry
 ) {
@@ -5524,178 +5551,248 @@ async function runStartupSequence(
         return;
     }
 
-    startupRunning = true;
-
-    prepareStartup();
-
-    const boot =
-        telemetry?.dashboard?.boot;
-
-    let services = [];
-
-    try {
-        services =
-            await getServices();
-    } catch {
-        services = [];
-    }
-
-    updateStartupServices(
-        services
-    );
-
-
-    /* ---------------------------------------------------------
-       PHASE 01 — SILENCE
-       --------------------------------------------------------- */
-
-    setBootPhase(
-        " ",
-        "",
-        0
-    );
-
-    await wait(
-        220
-    );
-
-
-    /* ---------------------------------------------------------
-       PHASE 02 — WAKE
-       --------------------------------------------------------- */
 
     const overlay =
         byId(
             "startup-overlay"
         );
 
-    overlay?.classList.add(
-        "startup-awake"
-    );
-
-    setBootPhase(
-        "WAKE",
-        "Establishing local runtime",
-        12
-    );
-
-    await wait(
-        650
-    );
-
-
-    /* ---------------------------------------------------------
-       PHASE 03 — CORE
-       --------------------------------------------------------- */
-
-    overlay?.classList.add(
-        "startup-core-active"
-    );
-
-    setBootPhase(
-        "CORE",
-        "Forming L.U.N.A. core",
-        28
-    );
-
-    await wait(
-        720
-    );
-
-
-    /* ---------------------------------------------------------
-       PHASE 04 — SERVICES
-       --------------------------------------------------------- */
-
-    overlay?.classList.add(
-        "startup-services-active"
-    );
-
-    setBootPhase(
-        "SYSTEM",
-        "Bringing local services online",
-        48
-    );
-
-    await wait(
-        620
-    );
-
-
-    /*
-     * Re-check service state after the
-     * constellation has appeared.
-     */
-
-    try {
-        services =
-            await getServices();
-
-        updateStartupServices(
-            services
-        );
-    } catch {
-        // Keep the last known state.
-    }
-
-
-    /* ---------------------------------------------------------
-       PHASE 05 — IDENTITY
-       --------------------------------------------------------- */
-
-    overlay?.classList.add(
-        "startup-signature-active"
-    );
-
-    setBootPhase(
-        "IDENTITY",
-        "Loading assistant profile",
-        70
-    );
-
-    await wait(
-        280
-    );
-
-    await animateStartupSignature(
-        820
-    );
-
-
-    /* ---------------------------------------------------------
-       PHASE 06 — ONLINE
-       --------------------------------------------------------- */
-
-    setBootPhase(
-        "ONLINE",
-        "L.U.N.A. is ready",
-        100
-    );
-
-    await wait(
-        480
-    );
-
-
-    /* ---------------------------------------------------------
-       FINALIZE
-       --------------------------------------------------------- */
-
     if (
-        boot?.boot_id
+        !overlay
     ) {
-        localStorage.setItem(
-            "luna_last_boot_id",
-            boot.boot_id
-        );
+        return;
     }
 
-    revealDashboard();
 
     startupRunning =
-        false;
+        true;
+
+
+    try {
+
+        /*
+         * IMPORTANT:
+         *
+         * The animation begins immediately.
+         *
+         * We do NOT wait for /api/services
+         * before waking the visual system.
+         */
+
+        if (
+            !prepareStartup()
+        ) {
+            return;
+        }
+
+
+        /*
+         * Use the service data that the
+         * dashboard already fetched.
+         *
+         * No blocking network request.
+         */
+
+        updateStartupServices(
+            latestServices
+        );
+
+
+        /* -------------------------------------------------
+           01 — SILENCE
+           ------------------------------------------------- */
+
+        setBootPhase(
+            "",
+            "",
+            0
+        );
+
+
+        await wait(
+            180
+        );
+
+
+        /* -------------------------------------------------
+           02 — WAKE
+           ------------------------------------------------- */
+
+        overlay.classList.add(
+            "startup-awake"
+        );
+
+
+        setBootPhase(
+            "WAKE",
+            "Establishing local runtime",
+            12
+        );
+
+
+        await wait(
+            520
+        );
+
+
+        /* -------------------------------------------------
+           03 — CORE
+           ------------------------------------------------- */
+
+        overlay.classList.add(
+            "startup-core-active"
+        );
+
+
+        setBootPhase(
+            "CORE",
+            "Forming L.U.N.A. core",
+            30
+        );
+
+
+        await wait(
+            680
+        );
+
+
+        /* -------------------------------------------------
+           04 — SERVICES
+           ------------------------------------------------- */
+
+        overlay.classList.add(
+            "startup-services-active"
+        );
+
+
+        setBootPhase(
+            "SYSTEM",
+            "Bringing local services online",
+            52
+        );
+
+
+        /*
+         * Refresh service labels in the
+         * background without blocking
+         * the cinematic sequence.
+         */
+
+        getServices()
+            .then(
+                services => {
+                    updateStartupServices(
+                        services
+                    );
+                }
+            )
+            .catch(
+                () => {
+                    /*
+                     * Keep the last known
+                     * service state.
+                     */
+                }
+            );
+
+
+        await wait(
+            560
+        );
+
+
+        /* -------------------------------------------------
+           05 — IDENTITY
+           ------------------------------------------------- */
+
+        overlay.classList.add(
+            "startup-signature-active"
+        );
+
+
+        setBootPhase(
+            "IDENTITY",
+            "Loading assistant profile",
+            70
+        );
+
+
+        await wait(
+            260
+        );
+
+
+        await animateStartupSignature(
+            820
+        );
+
+
+        /* -------------------------------------------------
+           06 — ONLINE
+           ------------------------------------------------- */
+
+        setBootPhase(
+            "ONLINE",
+            "L.U.N.A. is ready",
+            100
+        );
+
+
+        await wait(
+            360
+        );
+
+
+        /*
+         * Store the boot only after the
+         * cinematic successfully completed.
+         */
+
+        const boot =
+            telemetry?.dashboard?.boot;
+
+
+        if (
+            boot?.boot_id
+        ) {
+            localStorage.setItem(
+                "luna_last_boot_id",
+                boot.boot_id
+            );
+        }
+
+
+        revealDashboard();
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            "[L.U.N.A.] Startup sequence failed:",
+            error
+        );
+
+
+        /*
+         * Never leave the dashboard
+         * trapped behind the startup overlay.
+         */
+
+        revealDashboard();
+
+    } finally {
+
+        startupRunning =
+            false;
+    }
 }
 
+
+/* =========================================================
+   STARTUP ELIGIBILITY
+   ========================================================= */
 
 function shouldRunStartup(
     telemetry
@@ -5703,22 +5800,40 @@ function shouldRunStartup(
     const bootId =
         telemetry?.dashboard?.boot?.boot_id;
 
-    if (!bootId) {
+
+    if (
+        !bootId
+    ) {
         return false;
     }
+
 
     const previous =
         localStorage.getItem(
             "luna_last_boot_id"
         );
 
-    if (!previous) {
+
+    /*
+     * First dashboard load.
+     */
+
+    if (
+        !previous
+    ) {
         return true;
     }
 
-    return previous !== bootId;
-}
 
+    /*
+     * New core process.
+     */
+
+    return (
+        bootId !==
+        previous
+    );
+}
 
 /* =========================================================
    FIXED HUMAN CONTROLS
@@ -6088,7 +6203,32 @@ function renderTelemetry(
             data: {},
         };
 
-    if (!demoRunning) {
+    const bootId =
+        dashboard.boot?.boot_id;
+
+    if (
+        bootId &&
+        bootId !== lastBootId
+    ) {
+        lastBootId =
+            bootId;
+
+        if (
+            shouldRunStartup(
+                telemetry
+            )
+        ) {
+            runStartupSequence(
+                telemetry
+            );
+        }
+    }
+
+
+    if (
+        !demoRunning &&
+        !startupRunning
+    ) {
         const presentationActive =
             renderPresentation(
                 presentation
@@ -6098,40 +6238,6 @@ function renderTelemetry(
             renderState(
                 state,
                 dashboard.status?.message
-            );
-        }
-    }
-
-    setText(
-        "canvas-clock",
-        formatTime(
-            telemetry.timestamp
-        )
-    );
-
-    setText(
-        "canvas-connection",
-        telemetry.core?.status === "online"
-            ? "CORE ONLINE"
-            : "CORE —"
-    );
-
-    const bootId =
-        dashboard.boot?.boot_id;
-
-    if (
-        bootId &&
-        bootId !== lastBootId
-    ) {
-        lastBootId = bootId;
-
-        if (
-            shouldRunStartup(
-                telemetry
-            )
-        ) {
-            runStartupSequence(
-                telemetry
             );
         }
     }
