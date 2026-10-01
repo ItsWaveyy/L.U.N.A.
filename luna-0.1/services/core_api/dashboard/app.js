@@ -5426,6 +5426,24 @@ function prepareStartup() {
     if (pen) {
         pen.style.opacity =
             "0";
+
+        pen.style.left =
+            "";
+
+        pen.style.top =
+            "";
+    }
+
+
+    const signature =
+        byId(
+            "startup-signature"
+        );
+
+    if (signature) {
+        signature.classList.remove(
+            "is-visible"
+        );
     }
 
 
@@ -5454,15 +5472,18 @@ function prepareStartup() {
                     "error"
                 );
 
+
                 const state =
                     element.querySelector(
                         ".startup-service-state"
                     );
 
+
                 if (state) {
                     state.textContent =
                         "VERIFYING";
                 }
+
             }
         );
 
@@ -5610,7 +5631,7 @@ async function runStartupSequence(
 
 
         await wait(
-            180
+            350
         );
 
 
@@ -5631,7 +5652,7 @@ async function runStartupSequence(
 
 
         await wait(
-            520
+            850
         );
 
 
@@ -5652,7 +5673,7 @@ async function runStartupSequence(
 
 
         await wait(
-            680
+            950
         );
 
 
@@ -5697,7 +5718,7 @@ async function runStartupSequence(
 
 
         await wait(
-            560
+            800
         );
 
 
@@ -5718,12 +5739,12 @@ async function runStartupSequence(
 
 
         await wait(
-            260
+            350
         );
 
 
         await animateStartupSignature(
-            820
+            1200
         );
 
 
@@ -5739,7 +5760,7 @@ async function runStartupSequence(
 
 
         await wait(
-            360
+            650
         );
 
 
