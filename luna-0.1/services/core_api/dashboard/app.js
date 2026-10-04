@@ -5815,478 +5815,246 @@ function startupDrawCore(
     context.restore();
 }
 
-function startupDrawSignature(
-    context,
-    progress
-) {
-    const width =
-        startupState.width;
+function startupDrawSignature(ctx, progress) {
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
 
-    const height =
-        startupState.height;
+  /*
+   * L.U.N.A. handwritten signature
+   * Fixed logical coordinate space.
+   * Positioning is always centered against the actual canvas.
+   */
 
-    /*
-     * L.U.N.A. is drawn as one continuous
-     * stroke sequence. Each entry is an
-     * array of [x, y] points.
-     *
-     * The entire word is centered from
-     * its calculated bounds instead of using
-     * a hard-coded left offset.
-     */
+  const strokes = [
+    // L — confident downstroke into a long handwritten sweep
+    [
+      [8, 5],
+      [7, 12],
+      [6, 21],
+      [5, 31],
+      [6, 40],
+      [9, 47],
+      [15, 51],
+      [24, 51],
+      [34, 48],
+      [43, 43]
+    ],
 
-    const strokes = [
-        // L
-        [
-            [0, 0],
-            [0, 54],
-            [38, 54]
-        ],
+    // U — rounded, deep bowl
+    [
+      [47, 12],
+      [46, 21],
+      [46, 31],
+      [47, 40],
+      [51, 47],
+      [57, 51],
+      [64, 51],
+      [70, 47],
+      [74, 40],
+      [76, 31],
+      [77, 21],
+      [78, 11]
+    ],
 
-        // .
-        [
-            [52, 54],
-            [52, 54]
-        ],
+    // N — flowing downstroke → diagonal → rising finish
+    [
+      [84, 47],
+      [85, 39],
+      [87, 30],
+      [89, 20],
+      [91, 10],
+      [93, 5],
+      [96, 12],
+      [99, 22],
+      [102, 32],
+      [105, 42],
+      [108, 49],
+      [111, 45],
+      [114, 36],
+      [117, 26],
+      [120, 16],
+      [123, 7]
+    ],
 
-        // U
-        [
-            [68, 0],
-            [68, 42],
-            [72, 54],
-            [88, 58],
-            [104, 54],
-            [108, 42],
-            [108, 0]
-        ],
+    // A — tall, slightly slanted
+    [
+      [128, 49],
+      [132, 39],
+      [136, 27],
+      [140, 16],
+      [144, 5],
+      [148, 16],
+      [152, 28],
+      [156, 40],
+      [160, 50]
+    ],
 
-        // .
-        [
-            [122, 54],
-            [122, 54]
-        ],
+    // A crossbar — slightly rising, like a real handwritten cross
+    [
+      [134, 32],
+      [140, 30],
+      [147, 29],
+      [154, 30]
+    ],
 
-        // N
-        [
-            [138, 54],
-            [138, 0],
-            [176, 54],
-            [176, 0]
-        ],
+    // Final flourish
+    [
+      [157, 48],
+      [164, 51],
+      [172, 50],
+      [180, 46],
+      [187, 41],
+      [193, 34],
+      [197, 28]
+    ]
+  ];
 
-        // .
-        [
-            [190, 54],
-            [190, 54]
-        ],
+  // Smooth the hand-drawn points.
+  function smoothPoints(points, subdivisions = 10) {
+    const result = [];
 
-        // A
-        [
-            [206, 54],
-            [225, 0],
-            [244, 54]
-        ],
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(0, i - 1)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(points.length - 1, i + 2)];
 
-        // A crossbar
-        [
-            [214, 36],
-            [237, 36]
-        ]
-    ];
+      for (let j = 0; j < subdivisions; j++) {
+        const t = j / subdivisions;
+        const t2 = t * t;
+        const t3 = t2 * t;
 
+        const x =
+          0.5 *
+          (
+            (2 * p1[0]) +
+            (-p0[0] + p2[0]) * t +
+            (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+            (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+          );
 
-    /*
-     * Calculate total stroke length.
-     * This lets progress move a single
-     * drawing cursor through the entire
-     * signature instead of revealing
-     * whole letters at once.
-     */
+        const y =
+          0.5 *
+          (
+            (2 * p1[1]) +
+            (-p0[1] + p2[1]) * t +
+            (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+            (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+          );
 
-    let totalLength = 0;
-
-    const lengths = [];
-
-    for (const stroke of strokes) {
-        let strokeLength = 0;
-
-        for (
-            let index = 1;
-            index < stroke.length;
-            index++
-        ) {
-            const previous =
-                stroke[index - 1];
-
-            const current =
-                stroke[index];
-
-            const dx =
-                current[0] -
-                previous[0];
-
-            const dy =
-                current[1] -
-                previous[1];
-
-            strokeLength +=
-                Math.sqrt(
-                    dx * dx +
-                    dy * dy
-                );
-        }
-
-        lengths.push(
-            strokeLength
-        );
-
-        totalLength +=
-            strokeLength;
+        result.push([x, y]);
+      }
     }
 
-
-    /*
-     * Determine the actual visual bounds.
-     */
-
-    const minX =
-        Math.min(
-            ...strokes.flat().map(
-                point => point[0]
-            )
-        );
-
-    const maxX =
-        Math.max(
-            ...strokes.flat().map(
-                point => point[0]
-            )
-        );
-
-    const minY =
-        Math.min(
-            ...strokes.flat().map(
-                point => point[1]
-            )
-        );
-
-    const maxY =
-        Math.max(
-            ...strokes.flat().map(
-                point => point[1]
-            )
-        );
-
-
-    const signatureWidth =
-        maxX - minX;
-
-    const signatureHeight =
-        maxY - minY;
-
-
-    /*
-     * Scale the signature relative to
-     * the available canvas.
-     */
-
-    const scale =
-        Math.min(
-            width * 0.52 /
-                signatureWidth,
-
-            height * 0.16 /
-                signatureHeight,
-
-            2.2
-        );
-
-
-    /*
-     * Exact center of the canvas.
-     */
-
-    const centerX =
-        width / 2;
-
-    const centerY =
-        height / 2;
-
-
-    /*
-     * Convert the signature bounds so
-     * the rendered geometry is centered
-     * exactly around the canvas center.
-     */
-
-    const originX =
-        centerX -
-        (
-            signatureWidth *
-            scale
-        ) / 2 -
-        minX * scale;
-
-    const originY =
-        centerY -
-        (
-            signatureHeight *
-            scale
-        ) / 2 -
-        minY * scale;
-
-
-    /*
-     * How much of the total path has
-     * been written.
-     */
-
-    const targetLength =
-        startupClamp(
-            progress,
-            0,
-            1
-        ) *
-        totalLength;
-
-
-    let remaining =
-        targetLength;
-
-
-    context.save();
-
-    context.strokeStyle =
-        "rgba(255,255,255,.95)";
-
-    context.lineWidth =
-        Math.max(
-            1.5,
-            2.3 * scale
-        );
-
-    context.lineCap =
-        "round";
-
-    context.lineJoin =
-        "round";
-
-    context.shadowColor =
-        "rgba(169,140,255,.55)";
-
-    context.shadowBlur =
-        Math.max(
-            7,
-            10 * scale
-        );
-
-
-    /*
-     * Draw the strokes progressively.
-     */
-
-    for (
-        let strokeIndex = 0;
-        strokeIndex < strokes.length;
-        strokeIndex++
-    ) {
-        if (remaining <= 0) {
-            break;
-        }
-
-        const stroke =
-            strokes[strokeIndex];
-
-        const strokeLength =
-            lengths[strokeIndex];
-
-
-        /*
-         * Dot strokes have zero length.
-         * Once the writing cursor reaches
-         * them, draw the dot.
-         */
-
-        if (strokeLength === 0) {
-            if (
-                remaining >= 0
-            ) {
-                const point =
-                    stroke[0];
-
-                context.beginPath();
-
-                context.arc(
-                    originX +
-                        point[0] *
-                        scale,
-
-                    originY +
-                        point[1] *
-                        scale,
-
-                    Math.max(
-                        2.2,
-                        2.8 * scale
-                    ),
-
-                    0,
-                    Math.PI * 2
-                );
-
-                context.fillStyle =
-                    "rgba(255,255,255,.95)";
-
-                context.fill();
-            }
-
-            continue;
-        }
-
-
-        const amount =
-            Math.min(
-                remaining,
-                strokeLength
-            );
-
-
-        /*
-         * Walk along this stroke until
-         * we've consumed the available
-         * writing distance.
-         */
-
-        let consumed = 0;
-
-        context.beginPath();
-
-        for (
-            let index = 1;
-            index < stroke.length;
-            index++
-        ) {
-            const previous =
-                stroke[index - 1];
-
-            const current =
-                stroke[index];
-
-            const dx =
-                current[0] -
-                previous[0];
-
-            const dy =
-                current[1] -
-                previous[1];
-
-            const segmentLength =
-                Math.sqrt(
-                    dx * dx +
-                    dy * dy
-                );
-
-            if (
-                consumed +
-                segmentLength <=
-                amount
-            ) {
-                if (
-                    index === 1
-                ) {
-                    context.moveTo(
-                        originX +
-                            previous[0] *
-                            scale,
-
-                        originY +
-                            previous[1] *
-                            scale
-                    );
-                }
-
-                context.lineTo(
-                    originX +
-                        current[0] *
-                        scale,
-
-                    originY +
-                        current[1] *
-                        scale
-                );
-
-                consumed +=
-                    segmentLength;
-
-                continue;
-            }
-
-
-            /*
-             * Partial segment:
-             * interpolate the pen position.
-             */
-
-            const remainingSegment =
-                amount -
-                consumed;
-
-            const ratio =
-                segmentLength > 0
-                    ? remainingSegment /
-                      segmentLength
-                    : 0;
-
-            const x =
-                previous[0] +
-                dx * ratio;
-
-            const y =
-                previous[1] +
-                dy * ratio;
-
-
-            if (
-                index === 1
-            ) {
-                context.moveTo(
-                    originX +
-                        previous[0] *
-                        scale,
-
-                    originY +
-                        previous[1] *
-                        scale
-                );
-            }
-
-            context.lineTo(
-                originX +
-                    x *
-                    scale,
-
-                originY +
-                    y *
-                    scale
-            );
-
-            consumed =
-                amount;
-
-            break;
-        }
-
-        context.stroke();
-
-        remaining -=
-            Math.min(
-                amount,
-                strokeLength
-            );
+    result.push(points[points.length - 1]);
+    return result;
+  }
+
+  const smoothStrokes = strokes.map(stroke => smoothPoints(stroke));
+
+  /*
+   * Fixed logical bounds.
+   * This is intentionally independent of canvas dimensions.
+   */
+  const logicalWidth = 205;
+  const logicalHeight = 56;
+
+  /*
+   * Scale the complete signature as one object.
+   * Width is the primary constraint so it stays visually substantial.
+   */
+  const scale = Math.min(
+    (width * 0.48) / logicalWidth,
+    (height * 0.13) / logicalHeight
+  );
+
+  /*
+   * Center the LOGICAL signature box itself.
+   * This is the important part — no accumulated offsets.
+   */
+  const originX =
+    (width - logicalWidth * scale) / 2;
+
+  const originY =
+    (height - logicalHeight * scale) / 2;
+
+  const totalPoints = smoothStrokes.reduce(
+    (sum, stroke) => sum + stroke.length,
+    0
+  );
+
+  const drawCount = Math.floor(totalPoints * progress);
+
+  let pointsDrawn = 0;
+  let lastPoint = null;
+
+  ctx.save();
+
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.strokeStyle = "rgba(215, 204, 255, 0.94)";
+  ctx.shadowColor = "rgba(169, 140, 255, 0.55)";
+  ctx.shadowBlur = 16;
+  ctx.lineWidth = Math.max(2, scale * 1.65);
+
+  for (const stroke of smoothStrokes) {
+    if (pointsDrawn >= drawCount) break;
+
+    const remaining = drawCount - pointsDrawn;
+    const count = Math.min(stroke.length, remaining);
+
+    if (count < 2) {
+      pointsDrawn += count;
+      continue;
     }
 
+    ctx.beginPath();
 
-    context.restore();
+    for (let i = 0; i < count; i++) {
+      const [x, y] = stroke[i];
+
+      const px = originX + x * scale;
+      const py = originY + y * scale;
+
+      if (i === 0) {
+        ctx.moveTo(px, py);
+      } else {
+        ctx.lineTo(px, py);
+      }
+
+      lastPoint = [px, py];
+    }
+
+    ctx.stroke();
+    pointsDrawn += count;
+  }
+
+  ctx.restore();
+
+  // Glowing pen tip.
+  if (lastPoint && progress < 1) {
+    const [x, y] = lastPoint;
+
+    ctx.save();
+
+    ctx.beginPath();
+    ctx.arc(
+      x,
+      y,
+      Math.max(2.5, scale * 2),
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fillStyle = "rgba(240, 235, 255, 0.96)";
+    ctx.shadowColor = "rgba(169, 140, 255, 0.95)";
+    ctx.shadowBlur = 14;
+
+    ctx.fill();
+
+    ctx.restore();
+  }
 }
 
 
@@ -6360,7 +6128,7 @@ function startupDraw(
 
     const signatureProgress =
         startupClamp(
-            (normalized - .62) / .20,
+            (normalized - .58) / .30,
             0,
             1
         );
