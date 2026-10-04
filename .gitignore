@@ -21,3 +21,6 @@ output/hey_luna/
 .DS_Store
 
 en_core_web_sm-3.8.0-py3-none-any.whl
+
+# Local L.U.N.A. runtime data
+data/luna.db
