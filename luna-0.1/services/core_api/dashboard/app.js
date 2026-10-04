@@ -5815,246 +5815,397 @@ function startupDrawCore(
     context.restore();
 }
 
-function startupDrawSignature(ctx, progress) {
-  const width = ctx.canvas.width;
-  const height = ctx.canvas.height;
+function startupDrawSignature(
+    context,
+    progress
+) {
+    const cx =
+        startupState.width / 2;
 
-  /*
-   * L.U.N.A. handwritten signature
-   * Fixed logical coordinate space.
-   * Positioning is always centered against the actual canvas.
-   */
+    const cy =
+        startupState.height / 2;
 
-  const strokes = [
-    // L — confident downstroke into a long handwritten sweep
-    [
-      [8, 5],
-      [7, 12],
-      [6, 21],
-      [5, 31],
-      [6, 40],
-      [9, 47],
-      [15, 51],
-      [24, 51],
-      [34, 48],
-      [43, 43]
-    ],
+    const base =
+        Math.min(
+            startupState.width,
+            startupState.height
+        );
 
-    // U — rounded, deep bowl
-    [
-      [47, 12],
-      [46, 21],
-      [46, 31],
-      [47, 40],
-      [51, 47],
-      [57, 51],
-      [64, 51],
-      [70, 47],
-      [74, 40],
-      [76, 31],
-      [77, 21],
-      [78, 11]
-    ],
+    /*
+     * L.U.N.A. handwritten signature
+     * Drawn in the exact same coordinate space
+     * as the startup core and energy.
+     */
 
-    // N — flowing downstroke → diagonal → rising finish
-    [
-      [84, 47],
-      [85, 39],
-      [87, 30],
-      [89, 20],
-      [91, 10],
-      [93, 5],
-      [96, 12],
-      [99, 22],
-      [102, 32],
-      [105, 42],
-      [108, 49],
-      [111, 45],
-      [114, 36],
-      [117, 26],
-      [120, 16],
-      [123, 7]
-    ],
+    const strokes = [
+        // L
+        [
+            [8, 5],
+            [7, 12],
+            [6, 21],
+            [5, 31],
+            [6, 40],
+            [9, 47],
+            [15, 51],
+            [24, 51],
+            [34, 48],
+            [43, 43]
+        ],
 
-    // A — tall, slightly slanted
-    [
-      [128, 49],
-      [132, 39],
-      [136, 27],
-      [140, 16],
-      [144, 5],
-      [148, 16],
-      [152, 28],
-      [156, 40],
-      [160, 50]
-    ],
+        // U
+        [
+            [47, 12],
+            [46, 21],
+            [46, 31],
+            [47, 40],
+            [51, 47],
+            [57, 51],
+            [64, 51],
+            [70, 47],
+            [74, 40],
+            [76, 31],
+            [77, 21],
+            [78, 11]
+        ],
 
-    // A crossbar — slightly rising, like a real handwritten cross
-    [
-      [134, 32],
-      [140, 30],
-      [147, 29],
-      [154, 30]
-    ],
+        // N
+        [
+            [84, 47],
+            [85, 39],
+            [87, 30],
+            [89, 20],
+            [91, 10],
+            [93, 5],
+            [96, 12],
+            [99, 22],
+            [102, 32],
+            [105, 42],
+            [108, 49],
+            [111, 45],
+            [114, 36],
+            [117, 26],
+            [120, 16],
+            [123, 7]
+        ],
 
-    // Final flourish
-    [
-      [157, 48],
-      [164, 51],
-      [172, 50],
-      [180, 46],
-      [187, 41],
-      [193, 34],
-      [197, 28]
-    ]
-  ];
+        // A
+        [
+            [128, 49],
+            [132, 39],
+            [136, 27],
+            [140, 16],
+            [144, 5],
+            [148, 16],
+            [152, 28],
+            [156, 40],
+            [160, 50]
+        ],
 
-  // Smooth the hand-drawn points.
-  function smoothPoints(points, subdivisions = 10) {
-    const result = [];
+        // A crossbar
+        [
+            [134, 32],
+            [140, 30],
+            [147, 29],
+            [154, 30]
+        ],
 
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[Math.max(0, i - 1)];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[Math.min(points.length - 1, i + 2)];
+        // Final flourish
+        [
+            [157, 48],
+            [164, 51],
+            [172, 50],
+            [180, 46],
+            [187, 41],
+            [193, 34],
+            [197, 28]
+        ]
+    ];
 
-      for (let j = 0; j < subdivisions; j++) {
-        const t = j / subdivisions;
-        const t2 = t * t;
-        const t3 = t2 * t;
+    /*
+     * Smooth the strokes.
+     */
+    function smoothPoints(
+        points,
+        subdivisions = 10
+    ) {
+        const result = [];
 
-        const x =
-          0.5 *
-          (
-            (2 * p1[0]) +
-            (-p0[0] + p2[0]) * t +
-            (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
-            (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
-          );
+        for (
+            let i = 0;
+            i < points.length - 1;
+            i++
+        ) {
+            const p0 =
+                points[
+                    Math.max(0, i - 1)
+                ];
 
-        const y =
-          0.5 *
-          (
-            (2 * p1[1]) +
-            (-p0[1] + p2[1]) * t +
-            (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
-            (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
-          );
+            const p1 =
+                points[i];
 
-        result.push([x, y]);
-      }
+            const p2 =
+                points[i + 1];
+
+            const p3 =
+                points[
+                    Math.min(
+                        points.length - 1,
+                        i + 2
+                    )
+                ];
+
+            for (
+                let j = 0;
+                j < subdivisions;
+                j++
+            ) {
+                const t =
+                    j / subdivisions;
+
+                const t2 =
+                    t * t;
+
+                const t3 =
+                    t2 * t;
+
+                const x =
+                    0.5 *
+                    (
+                        (2 * p1[0]) +
+                        (-p0[0] + p2[0]) * t +
+                        (
+                            2 * p0[0] -
+                            5 * p1[0] +
+                            4 * p2[0] -
+                            p3[0]
+                        ) * t2 +
+                        (
+                            -p0[0] +
+                            3 * p1[0] -
+                            3 * p2[0] +
+                            p3[0]
+                        ) * t3
+                    );
+
+                const y =
+                    0.5 *
+                    (
+                        (2 * p1[1]) +
+                        (-p0[1] + p2[1]) * t +
+                        (
+                            2 * p0[1] -
+                            5 * p1[1] +
+                            4 * p2[1] -
+                            p3[1]
+                        ) * t2 +
+                        (
+                            -p0[1] +
+                            3 * p1[1] -
+                            3 * p2[1] +
+                            p3[1]
+                        ) * t3
+                    );
+
+                result.push([
+                    x,
+                    y
+                ]);
+            }
+        }
+
+        result.push(
+            points[
+                points.length - 1
+            ]
+        );
+
+        return result;
     }
 
-    result.push(points[points.length - 1]);
-    return result;
-  }
+    const smoothStrokes =
+        strokes.map(
+            stroke =>
+                smoothPoints(stroke)
+        );
 
-  const smoothStrokes = strokes.map(stroke => smoothPoints(stroke));
+    /*
+     * Same sizing philosophy as the core:
+     * derive everything from startupState dimensions.
+     */
+    const signatureWidth =
+        base * .46;
 
-  /*
-   * Fixed logical bounds.
-   * This is intentionally independent of canvas dimensions.
-   */
-  const logicalWidth = 205;
-  const logicalHeight = 56;
+    const scale =
+        signatureWidth / 205;
 
-  /*
-   * Scale the complete signature as one object.
-   * Width is the primary constraint so it stays visually substantial.
-   */
-  const scale = Math.min(
-    (width * 0.48) / logicalWidth,
-    (height * 0.13) / logicalHeight
-  );
+    /*
+     * Center the signature around 0,0.
+     *
+     * The original points occupy roughly
+     * 205 × 56 logical units.
+     */
+    const signatureHeight =
+        56 * scale;
 
-  /*
-   * Center the LOGICAL signature box itself.
-   * This is the important part — no accumulated offsets.
-   */
-  const originX =
-    (width - logicalWidth * scale) / 2;
+    const originX =
+        -signatureWidth / 2;
 
-  const originY =
-    (height - logicalHeight * scale) / 2;
+    const originY =
+        -signatureHeight / 2;
 
-  const totalPoints = smoothStrokes.reduce(
-    (sum, stroke) => sum + stroke.length,
-    0
-  );
+    const totalPoints =
+        smoothStrokes.reduce(
+            (sum, stroke) =>
+                sum + stroke.length,
+            0
+        );
 
-  const drawCount = Math.floor(totalPoints * progress);
+    const drawCount =
+        Math.floor(
+            totalPoints * progress
+        );
 
-  let pointsDrawn = 0;
-  let lastPoint = null;
+    let pointsDrawn = 0;
+    let lastPoint = null;
 
-  ctx.save();
+    /*
+     * EXACT SAME TRANSFORM MODEL
+     * AS startupDrawCore().
+     */
+    context.save();
 
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  ctx.strokeStyle = "rgba(215, 204, 255, 0.94)";
-  ctx.shadowColor = "rgba(169, 140, 255, 0.55)";
-  ctx.shadowBlur = 16;
-  ctx.lineWidth = Math.max(2, scale * 1.65);
-
-  for (const stroke of smoothStrokes) {
-    if (pointsDrawn >= drawCount) break;
-
-    const remaining = drawCount - pointsDrawn;
-    const count = Math.min(stroke.length, remaining);
-
-    if (count < 2) {
-      pointsDrawn += count;
-      continue;
-    }
-
-    ctx.beginPath();
-
-    for (let i = 0; i < count; i++) {
-      const [x, y] = stroke[i];
-
-      const px = originX + x * scale;
-      const py = originY + y * scale;
-
-      if (i === 0) {
-        ctx.moveTo(px, py);
-      } else {
-        ctx.lineTo(px, py);
-      }
-
-      lastPoint = [px, py];
-    }
-
-    ctx.stroke();
-    pointsDrawn += count;
-  }
-
-  ctx.restore();
-
-  // Glowing pen tip.
-  if (lastPoint && progress < 1) {
-    const [x, y] = lastPoint;
-
-    ctx.save();
-
-    ctx.beginPath();
-    ctx.arc(
-      x,
-      y,
-      Math.max(2.5, scale * 2),
-      0,
-      Math.PI * 2
+    context.translate(
+        cx,
+        cy
     );
 
-    ctx.fillStyle = "rgba(240, 235, 255, 0.96)";
-    ctx.shadowColor = "rgba(169, 140, 255, 0.95)";
-    ctx.shadowBlur = 14;
+    context.lineCap =
+        "round";
 
-    ctx.fill();
+    context.lineJoin =
+        "round";
 
-    ctx.restore();
-  }
+    context.strokeStyle =
+        "rgba(215,204,255,.94)";
+
+    context.shadowColor =
+        "rgba(169,140,255,.55)";
+
+    context.shadowBlur =
+        16;
+
+    context.lineWidth =
+        Math.max(
+            2,
+            scale * 1.65
+        );
+
+    for (
+        const stroke of smoothStrokes
+    ) {
+        if (
+            pointsDrawn >=
+            drawCount
+        ) {
+            break;
+        }
+
+        const remaining =
+            drawCount -
+            pointsDrawn;
+
+        const count =
+            Math.min(
+                stroke.length,
+                remaining
+            );
+
+        if (count < 2) {
+            pointsDrawn += count;
+            continue;
+        }
+
+        context.beginPath();
+
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
+            const [
+                x,
+                y
+            ] = stroke[i];
+
+            const px =
+                originX +
+                x * scale;
+
+            const py =
+                originY +
+                y * scale;
+
+            if (i === 0) {
+                context.moveTo(
+                    px,
+                    py
+                );
+            } else {
+                context.lineTo(
+                    px,
+                    py
+                );
+            }
+
+            lastPoint = [
+                px,
+                py
+            ];
+        }
+
+        context.stroke();
+
+        pointsDrawn += count;
+    }
+
+    /*
+     * Pen tip.
+     */
+    if (
+        lastPoint &&
+        progress < 1
+    ) {
+        const [
+            x,
+            y
+        ] = lastPoint;
+
+        context.beginPath();
+
+        context.arc(
+            x,
+            y,
+            Math.max(
+                2.5,
+                scale * 2
+            ),
+            0,
+            Math.PI * 2
+        );
+
+        context.fillStyle =
+            "rgba(240,235,255,.96)";
+
+        context.shadowColor =
+            "rgba(169,140,255,.95)";
+
+        context.shadowBlur =
+            14;
+
+        context.fill();
+    }
+
+    context.restore();
 }
 
 
