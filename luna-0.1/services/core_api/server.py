@@ -392,7 +392,7 @@ def create_core_api(runtime=None) -> FastAPI:
         # ---------------------------------------------------------
         # Raspberry Pi deployment environment
         # ---------------------------------------------------------
-        repo_path = Path("/mnt/luna")
+        repo_path = Path("/mnt/luna/app/luna-0.1")
 
         branch = run_command(
             [

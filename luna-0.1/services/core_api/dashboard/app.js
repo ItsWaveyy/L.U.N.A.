@@ -4938,7 +4938,7 @@ function renderGenericPresentation(
    ========================================================= */
 
 async function toggleListening() {
-    const enabled = !latestTelemetry?.voice?.listening;
+    const enabled = !latestTelemetry?.core?.listening;
 
     try {
         await postJson("/api/control", {
@@ -5011,7 +5011,7 @@ async function reconnect() {
 
 function updateControlState() {
     const listening = Boolean(
-        latestTelemetry?.voice?.listening
+        latestTelemetry?.core?.listening
     );
 
     const button = byId("listening-button");
