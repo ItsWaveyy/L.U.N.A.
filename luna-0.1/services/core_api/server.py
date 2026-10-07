@@ -16,6 +16,7 @@ from config import LUNA_MODE
 LUNA_SERVICES = {
     "luna-core": "luna-core.service",
     "luna-agent": "luna-agent.service",
+    "luna-device": "luna-device.service",
     "kokoro": "kokoro.service",
     "ollama": "ollama.service",
 }
@@ -929,6 +930,7 @@ def create_core_api(runtime=None) -> FastAPI:
     LUNA_SERVICE_NAMES = {
         "luna-core": "luna-core.service",
         "luna-agent": "luna-agent.service",
+        "luna-device": "luna-device.service",
         "kokoro": "kokoro.service",
         "ollama": "ollama.service",
     }

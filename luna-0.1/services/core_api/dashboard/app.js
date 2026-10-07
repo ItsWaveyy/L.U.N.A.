@@ -667,6 +667,7 @@ function serviceDisplayName(service) {
     const names = {
         "luna-core": "CORE",
         "luna-agent": "AGENT",
+        "luna-device": "DEVICE",
         "kokoro": "KOKORO",
         "ollama": "OLLAMA",
     };
